@@ -10,6 +10,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
     <!-- Lucide Icons (SVG-based lightweight icons) -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body class="neon-dark-theme">
@@ -52,6 +54,10 @@
                 <a href="#assistant" class="nav-item" data-tab="assistant">
                     <i data-lucide="bot"></i>
                     <span data-i18n="menu_assistant">AI 어시스턴트</span>
+                </a>
+                <a href="#tracker" class="nav-item" data-tab="tracker">
+                    <i data-lucide="radar"></i>
+                    <span data-i18n="menu_tracker">실시간 AI 키워드 추적기</span>
                 </a>
                 <a href="#settings" class="nav-item" data-tab="settings">
                     <i data-lucide="settings"></i>
@@ -652,6 +658,122 @@
                     </div>
                 </div>
 
+                <!-- 8-1. REALTIME AI KEYWORD TRACKER VIEW -->
+                <div id="view-tracker" class="tab-pane">
+                    <div class="tracker-layout">
+                        <!-- Left Panel: Input & List -->
+                        <div class="tracker-sidebar-panel glass-panel border-neon-purple">
+                            <h3 class="card-title" data-i18n="title_tracker_input">모니터링 질문 등록</h3>
+                            <p class="card-desc" data-i18n="desc_tracker_input">네이버/구글 등에서 유입될 수 있는 핵심 질문 키워드를 등록합니다.</p>
+                            
+                            <!-- API Key Settings Section (Tucked cleanly inside) -->
+                            <div class="tracker-api-box">
+                                <div class="api-toggle-header" id="api-toggle-btn">
+                                    <span class="api-title"><i data-lucide="key" class="text-neon-cyan"></i> API 키 설정 (보안 보관)</span>
+                                    <i data-lucide="chevron-down" class="toggle-icon"></i>
+                                </div>
+                                <div class="api-inputs-wrapper" id="api-inputs-container" style="display: none;">
+                                    <div class="form-group">
+                                        <label for="tracker-gemini-key">Gemini API Key</label>
+                                        <input type="password" id="tracker-gemini-key" class="input-dark input-block" placeholder="AIzaSy... (Gemini API 키 입력)">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="tracker-openai-key">OpenAI API Key</label>
+                                        <input type="password" id="tracker-openai-key" class="input-dark input-block" placeholder="sk-proj-... (선택 사항)">
+                                    </div>
+                                    <button id="btn-save-tracker-keys" class="btn btn-sm btn-cyan btn-block">키 저장</button>
+                                </div>
+                            </div>
+                            
+                            <hr class="neon-divider">
+                            
+                            <!-- Keyword Input Form -->
+                            <div class="keyword-add-form">
+                                <div class="form-group">
+                                    <label for="new-question-input" data-i18n="lbl_new_question">추가할 질문 입력</label>
+                                    <div class="input-with-btn">
+                                        <input type="text" id="new-question-input" class="input-dark" placeholder="예: 강동구에서 대상포진 치료 잘하는 한의원 알려줘">
+                                        <button id="btn-add-question" class="btn btn-cyan"><i data-lucide="plus"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr class="neon-divider">
+
+                            <!-- Question List -->
+                            <div class="question-list-container">
+                                <h4 class="section-subtitle" data-i18n="title_question_list">등록된 질문 목록</h4>
+                                <div id="tracker-question-list" class="question-list">
+                                    <!-- Dynamic items will load here -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Panel: Charts and Tables -->
+                        <div class="tracker-main-panel">
+                            <!-- Upper: Line Chart (Trend) -->
+                            <div class="glass-panel card trend-chart-card border-neon-cyan">
+                                <div class="card-header-flex">
+                                    <div>
+                                        <h3 class="card-title" data-i18n="title_trend_chart">전체 대시보드 (주차별 전체 언급률)</h3>
+                                        <p class="card-desc" id="trend-chart-subtitle">선택된 질문에 대한 주차별 인지도 흐름 추이</p>
+                                    </div>
+                                    <div class="tracker-stats-badge">
+                                        질문 수: <span id="stats-question-count">0</span>개 • 모니터링: 7주
+                                    </div>
+                                </div>
+                                
+                                <div class="trend-summary-bar">
+                                    <span class="summary-label" data-i18n="lbl_total_mention_rate">전체 언급률:</span>
+                                    <span class="summary-rate-value" id="trend-overall-rate">0.0%</span>
+                                    <span class="summary-delta-value positive" id="trend-overall-delta">+0.0%p</span>
+                                </div>
+
+                                <div class="chart-container-wrapper" style="position: relative; height: 250px; width: 100%;">
+                                    <canvas id="trendLineChart"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Lower: Radar Chart & Table Grid -->
+                            <div class="tracker-bottom-row">
+                                <!-- Radar Chart -->
+                                <div class="glass-panel card radar-chart-card border-neon-green">
+                                    <h3 class="card-title" data-i18n="title_radar_chart">AI 모델별 언급률</h3>
+                                    <p class="card-desc">각 인공지능 엔진에서 측정된 점수</p>
+                                    <div class="chart-container-wrapper" style="position: relative; height: 260px; width: 100%; display: flex; justify-content: center; align-items: center;">
+                                        <canvas id="modelRadarChart"></canvas>
+                                    </div>
+                                </div>
+
+                                <!-- Detail Table -->
+                                <div class="glass-panel card table-card border-neon-purple">
+                                    <div class="card-header-flex">
+                                        <h3 class="card-title" data-i18n="title_model_table">AI 모델별 언급률 상세</h3>
+                                        <button id="btn-run-audit" class="btn btn-sm btn-outline-purple btn-glow">
+                                            <i data-lucide="play"></i> 실시간 분석 실행
+                                        </button>
+                                    </div>
+                                    <div class="table-wrapper">
+                                        <table class="tracker-detail-table">
+                                            <thead>
+                                                <tr>
+                                                    <th data-i18n="tbl_col_model">모델</th>
+                                                    <th data-i18n="tbl_col_baseline">기준</th>
+                                                    <th data-i18n="tbl_col_current">현재</th>
+                                                    <th data-i18n="tbl_col_change">변화</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tracker-table-body">
+                                                <!-- Dynamic rows will load here -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 9. PRINT ONLY CLOSING SUMMARY PAGE -->
                 <div id="view-print-summary" class="tab-pane print-only-pane">
                     <div class="glass-panel card closing-pitch-card border-neon-purple">
@@ -749,5 +871,6 @@
     <script src="schema.js"></script>
     <script src="assistant.js"></script>
     <script src="app.js"></script>
+    <script src="tracker.js"></script>
 </body>
 </html>
