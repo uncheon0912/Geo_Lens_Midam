@@ -687,7 +687,10 @@
                                         <input type="password" id="tracker-gemini-key" class="input-dark input-block" placeholder="AIzaSy... (Gemini API 키 입력)">
                                     </div>
                                     <div class="form-group">
-                                        <label for="tracker-openai-key">OpenAI API Key</label>
+                                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+                                            <label for="tracker-openai-key">OpenAI API Key</label>
+                                            <span id="openai-status-led" class="api-status-led status-pending" title="연결 상태: 대기"></span>
+                                        </div>
                                         <input type="password" id="tracker-openai-key" class="input-dark input-block" placeholder="sk-proj-... (선택 사항)">
                                     </div>
                                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">

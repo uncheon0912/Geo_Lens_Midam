@@ -1,15 +1,11 @@
 /**
- * Geo Lens Midam - 실시간 AI 키워드 추적기 모듈 (tracker.js) - 2차 보완 반영본
+ * Geo Lens Midam - 실시간 AI 키워드 추적기 모듈 (tracker.js)
  * 
- * 주요 기능:
- * 1. 로컬 저장소(localStorage) 기반 질문 등록 및 관리 (CRUD)
- * 2. Chart.js 기반 네온 다크 스타일의 꺾은선(Trend) 및 방사형(Radar) 차트 시각화
- * 3. Gemini API 실시간 연동 및 한국어 브랜드 키워드 언급률 분석
- * 4. ChatGPT, Claude, Grok, Perplexity 모델 연동 및 지능형 시뮬레이션 지원
- * 5. [신규] API 키 실시간 검증(연결 테스트) 및 LED 상태 연동 (🟡대기, 🟢연결, 🔴에러)
- * 6. [신규] 분석 타겟 브랜드명/병원명 설정 및 동적 정규식 매칭
- * 7. [신규] 국내 금융형 변동 색상 패치 (상승률 = 빨간색, 하락률 = 파란색)
- * 8. [신규] JSON 파일 백업 및 복원 (설정 내보내기 및 가져오기)
+ * 주요 보완 사항:
+ * 1. API 키별 개별 LED 상태 제어 (Gemini, OpenAI 각각 독립 램프 🟡🟢🔴 지원)
+ * 2. OpenAI API 실시간 연동 및 유효성 검증 (gpt-4o-mini 모델 활용)
+ * 3. Gemini 또는 OpenAI API 키 단 1개만 제공되어도, 실시간 수집 결과를 기점으로
+ *    나머지 모델들의 언급 점수를 영리하게 유추·배분하여 대시보드 그래프가 완결성 있게 동작하도록 수정
  */
 
 (function () {
@@ -31,7 +27,7 @@
 
             // 차트 인스턴스 전역 폰트 및 스타일 초기화
             if (window.Chart) {
-                Chart.defaults.color = '#94a3b8'; // slate-400
+                Chart.defaults.color = '#94a3b8';
                 Chart.defaults.font.family = "'Inter', sans-serif";
             }
 
@@ -55,10 +51,8 @@
                 this.updateDashboard();
                 this.initUIValues();
                 
-                // 저장된 API 키가 있다면 자동 연결성 자가 검증 실행
-                if (this.apiKeys.gemini) {
-                    this.silentVerifyGeminiKey();
-                }
+                // 저장된 API 키가 있다면 백그라운드 자동 자가 검증 실행
+                this.silentVerifyAllKeys();
             }, 100);
         }
 
@@ -85,7 +79,7 @@
                 try {
                     this.questions = JSON.parse(stored);
                 } catch (e) {
-                    console.error("질문 데이터 파싱 실패, 기본값으로 대체합니다.", e);
+                    console.error("질문 데이터 로드 실패", e);
                     this.setDefaultQuestions();
                 }
             } else {
@@ -93,7 +87,6 @@
             }
 
             if (this.questions.length > 0) {
-                // 활성화 질문ID가 없거나 목록에 없는 경우 첫 번째 질문 활성화
                 const exists = this.questions.some(q => q.id === this.activeQuestionId);
                 if (!exists) {
                     this.activeQuestionId = this.questions[0].id;
@@ -187,24 +180,20 @@
                     
                     this.saveSettings(geminiKey, openaiKey, brandName);
                     
-                    // 저장 시 연결 유효성 검사 자동 수행
-                    if (this.apiKeys.gemini) {
-                        this.verifyGeminiKey(true);
-                    } else {
-                        this.updateLedState('pending');
-                        alert('설정이 저장되었습니다. (입력된 Gemini API 키가 없으므로 테스트 모드로 작동합니다.)');
-                    }
+                    // 저장 시 입력된 모든 키에 대해 유효성 검증 자동 수행
+                    this.silentVerifyAllKeys();
+                    alert('설정이 저장되었습니다. 입력된 API 키 정보의 테스트 통신을 백그라운드에서 확인합니다.');
 
                     if (apiContainer) apiContainer.style.display = 'none';
                     if (apiToggle) apiToggle.classList.remove('active');
                 });
             }
 
-            // [신규] API 연결 테스트 버튼
+            // 연결 테스트 버튼 (구글 및 오픈AI 키 모두 개별/일괄 테스트 지원)
             const btnTestKeys = document.getElementById('btn-test-tracker-keys');
             if (btnTestKeys) {
                 btnTestKeys.addEventListener('click', () => {
-                    this.verifyGeminiKey(false);
+                    this.runConnectionTests();
                 });
             }
 
@@ -247,7 +236,7 @@
                 });
             }
 
-            // [신규] 설정 백업 파일 저장 (내보내기)
+            // 설정 백업 파일 저장 (내보내기)
             const btnExport = document.getElementById('btn-export-tracker');
             if (btnExport) {
                 btnExport.addEventListener('click', () => {
@@ -255,7 +244,7 @@
                 });
             }
 
-            // [신규] 설정 백업 파일 업로드 (가져오기)
+            // 설정 백업 파일 업로드 (가져오기)
             const btnImport = document.getElementById('btn-import-tracker');
             if (btnImport) {
                 btnImport.addEventListener('change', (e) => {
@@ -279,88 +268,103 @@
         }
 
         // --- LED 상태 표시등 업데이트 ---
-        updateLedState(state) {
-            const led = document.getElementById('gemini-status-led');
+        updateLedState(model, state) {
+            const ledId = model === 'gemini' ? 'gemini-status-led' : 'openai-status-led';
+            const led = document.getElementById(ledId);
             if (!led) return;
 
-            led.className = 'api-status-led'; // 초기화
+            led.className = 'api-status-led';
             if (state === 'pending') {
                 led.classList.add('status-pending');
-                led.title = '연결 상태: 대기 (검증 전)';
+                led.title = `${model.toUpperCase()} 연결 상태: 대기 (검증 전)`;
             } else if (state === 'connected') {
                 led.classList.add('status-connected');
-                led.title = '연결 상태: 정상 연결됨';
+                led.title = `${model.toUpperCase()} 연결 상태: 정상 연결 완료`;
             } else if (state === 'error') {
                 led.classList.add('status-error');
-                led.title = '연결 상태: 오류 (유효하지 않은 키)';
+                led.title = `${model.toUpperCase()} 연결 상태: 오류 (키가 비활성이거나 잘못됨)`;
             }
         }
 
-        // --- [신규] Gemini API 키 연결 테스트 및 LED 처리 ---
-        async verifyGeminiKey(isSilent = false) {
+        // --- API 키 유효성 테스트 통합 제어 ---
+        async runConnectionTests() {
             const geminiKey = document.getElementById('tracker-gemini-key').value.trim();
-            if (!geminiKey) {
-                this.updateLedState('pending');
-                if (!isSilent) alert('먼저 검증할 Gemini API Key를 입력해 주세요.');
+            const openaiKey = document.getElementById('tracker-openai-key').value.trim();
+
+            if (!geminiKey && !openaiKey) {
+                alert('검증할 API Key를 하나 이상 입력해 주세요.');
                 return;
             }
 
-            this.updateLedState('pending'); // 연결 확인 중 노란색 대기 유도
+            let results = [];
 
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
-            const payload = {
-                contents: [{
-                    parts: [{
-                        text: "Hello"
-                    }]
-                }]
-            };
-
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (response.ok) {
-                    // 통신 성공
-                    this.updateLedState('connected');
-                    if (!isSilent) alert('🟢 구글 Gemini API 서버 연결 테스트 성공! 정상적이고 유효한 API 키입니다.');
-                } else {
-                    // 통신 실패 (키 유효성 에러 등)
-                    this.updateLedState('error');
-                    if (!isSilent) alert('🔴 연결 오류: API 키가 잘못되었거나 제한되었습니다. 다시 확인해 주세요.');
-                }
-            } catch (err) {
-                console.error("Gemini API 연결 확인 실패:", err);
-                this.updateLedState('error');
-                if (!isSilent) alert('🔴 연결 실패: 네트워크 오류 또는 API 통신 장애가 발생했습니다.');
+            if (geminiKey) {
+                this.updateLedState('gemini', 'pending');
+                const res = await this.verifyKeyRequest('gemini', geminiKey);
+                this.updateLedState('gemini', res ? 'connected' : 'error');
+                results.push(`Gemini API: ${res ? '🟢 성공' : '🔴 실패'}`);
+            } else {
+                this.updateLedState('gemini', 'pending');
             }
+
+            if (openaiKey) {
+                this.updateLedState('openai', 'pending');
+                const res = await this.verifyKeyRequest('openai', openaiKey);
+                this.updateLedState('openai', res ? 'connected' : 'error');
+                results.push(`OpenAI API: ${res ? '🟢 성공' : '🔴 실패'}`);
+            } else {
+                this.updateLedState('openai', 'pending');
+            }
+
+            alert(`연결 테스트 결과:\n\n${results.join('\n')}\n\n실패로 표시된 모델은 키 유효 기간, 오타, 또는 잔액(Credit) 부족 현상일 수 있습니다.`);
         }
 
-        // 화면 로드 시 백그라운드에서 조용히 연결 확인 실행
-        async silentVerifyGeminiKey() {
-            const apiKey = this.apiKeys.gemini;
-            if (!apiKey) return;
-
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:key=${apiKey}`; // 간이 체크
+        async verifyKeyRequest(model, key) {
             try {
-                // 초당 성능 저하 방지용 가벼운 헬스 쿼리 발송
-                const checkUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-                const response = await fetch(checkUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: "health" }] }] })
-                });
-
-                if (response.ok) {
-                    this.updateLedState('connected');
-                } else {
-                    this.updateLedState('error');
+                if (model === 'gemini') {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`;
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: "Hello" }] }] })
+                    });
+                    return response.ok;
+                } else if (model === 'openai') {
+                    const url = `https://api.openai.com/v1/chat/completions`;
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${key}`
+                        },
+                        body: JSON.stringify({
+                            model: "gpt-4o-mini",
+                            messages: [{ role: "user", content: "Hello" }],
+                            max_tokens: 5
+                        })
+                    });
+                    return response.ok;
                 }
-            } catch (e) {
-                this.updateLedState('error');
+            } catch (err) {
+                console.error(`${model} 연결 오류:`, err);
+            }
+            return false;
+        }
+
+        // 화면 로드 및 갱신 시 자가 무소음 검증
+        async silentVerifyAllKeys() {
+            if (this.apiKeys.gemini) {
+                const res = await this.verifyKeyRequest('gemini', this.apiKeys.gemini);
+                this.updateLedState('gemini', res ? 'connected' : 'error');
+            } else {
+                this.updateLedState('gemini', 'pending');
+            }
+
+            if (this.apiKeys.openai) {
+                const res = await this.verifyKeyRequest('openai', this.apiKeys.openai);
+                this.updateLedState('openai', res ? 'connected' : 'error');
+            } else {
+                this.updateLedState('openai', 'pending');
             }
         }
 
@@ -390,7 +394,7 @@
         }
 
         deleteQuestion(id, event) {
-            if (event) event.stopPropagation(); // 카드 토글 버블링 방지
+            if (event) event.stopPropagation();
             if (!confirm('해당 질문을 정말 삭제하시겠습니까?')) return;
 
             this.questions = this.questions.filter(q => q.id !== id);
@@ -425,7 +429,6 @@
                 const baseline = q.baselineRate || 0;
                 const current = q.currentRate || 0;
                 const arrow = current >= baseline ? '▲' : '▼';
-                // [수정] 상승(Positive)은 빨간색(text-neon-red), 하락(Negative)은 하늘색(text-neon-cyan)으로 변경
                 const colorClass = current > baseline ? 'text-neon-red' : (current < baseline ? 'text-neon-cyan' : '');
 
                 div.innerHTML = `
@@ -485,13 +488,12 @@
             const deltaSpan = document.getElementById('trend-overall-delta');
             if (delta >= 0) {
                 deltaSpan.textContent = `▲ +${delta.toFixed(1)}%p`;
-                deltaSpan.className = 'summary-delta-value positive'; // CSS 매핑에 의해 이제 빨간색으로 표기됩니다.
+                deltaSpan.className = 'summary-delta-value positive';
             } else {
                 deltaSpan.textContent = `▼ ${delta.toFixed(1)}%p`;
-                deltaSpan.className = 'summary-delta-value negative'; // CSS 매핑에 의해 하늘색으로 표기됩니다.
+                deltaSpan.className = 'summary-delta-value negative';
             }
 
-            // 차트 및 테이블 동적 업데이트
             this.updateCharts(q);
             this.renderTable(q);
         }
@@ -510,7 +512,6 @@
             const models = ['ChatGPT', 'Gemini', 'Claude', 'Grok', 'Perplexity'];
             models.forEach(model => {
                 const curVal = q.modelRates[model] || 0;
-                // 기준값 설정 (간단히 현재값 대비 40% 수준)
                 const baseVal = Math.max(0, Math.round(curVal * 0.4));
                 const diff = curVal - baseVal;
                 
@@ -518,10 +519,10 @@
                 let diffClass = 'stable';
                 if (diff > 0) {
                     diffText = `▲ +${diff.toFixed(1)}%p`;
-                    diffClass = 'up'; // [수정] styles.css에서 up은 빨간색
+                    diffClass = 'up';
                 } else if (diff < 0) {
                     diffText = `▼ ${diff.toFixed(1)}%p`;
-                    diffClass = 'down'; // [수정] styles.css에서 down은 하늘색
+                    diffClass = 'down';
                 } else {
                     diffText = `● ${diff.toFixed(1)}%p`;
                 }
@@ -544,7 +545,6 @@
 
             if (!ctxLine || !ctxRadar) return;
 
-            // 1. Line Chart
             this.charts.line = new Chart(ctxLine, {
                 type: 'line',
                 data: {
@@ -609,7 +609,6 @@
                 }
             });
 
-            // 2. Radar Chart
             this.charts.radar = new Chart(ctxRadar, {
                 type: 'radar',
                 data: {
@@ -683,13 +682,11 @@
         updateCharts(q) {
             if (!q) return;
 
-            // 1. Line Chart Update
             if (this.charts.line) {
                 this.charts.line.data.datasets[0].data = q.history || [0, 0, 0, 0, 0, 0, 0];
                 this.charts.line.update();
             }
 
-            // 2. Radar Chart Update
             if (this.charts.radar) {
                 const models = ['ChatGPT', 'Gemini', 'Claude', 'Grok', 'Perplexity'];
                 const currentData = models.map(m => q.modelRates[m] || 0);
@@ -713,7 +710,7 @@
             }
         }
 
-        // --- 실시간 분석 실행 로직 (API 통신 & 타 엔진 시물레이션) ---
+        // --- 실시간 분석 실행 로직 (유연한 단일 API 지원) ---
         async runKeywordAudit() {
             const q = this.questions.find(item => item.id === this.activeQuestionId);
             if (!q) {
@@ -727,24 +724,49 @@
             btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 실시간 수집 및 분석 중...`;
 
             try {
-                let geminiScore = 0;
-                let usedRealGemini = false;
+                let geminiScore = null;
+                let chatGptScore = null;
 
-                // 1. 구글 Gemini API 연동 호출 시도
+                // 1. 구글 Gemini API 호출 (키가 존재할 시)
                 if (this.apiKeys.gemini) {
                     geminiScore = await this.fetchGeminiAudit(q.text);
-                    usedRealGemini = true;
-                } else {
-                    geminiScore = this.calculateSimulatedScore(q.text, 'Gemini');
                 }
 
-                // 2. 나머지 모델(ChatGPT, Claude, Grok, Perplexity) 점수 시뮬레이션 계산
-                const chatGptScore = this.calculateSimulatedScore(q.text, 'ChatGPT');
-                const claudeScore = this.calculateSimulatedScore(q.text, 'Claude');
-                const grokScore = this.calculateSimulatedScore(q.text, 'Grok');
-                const perplexityScore = this.calculateSimulatedScore(q.text, 'Perplexity');
+                // 2. OpenAI ChatGPT API 호출 (키가 존재할 시)
+                if (this.apiKeys.openai) {
+                    chatGptScore = await this.fetchOpenAIAudit(q.text);
+                }
 
-                // 3. 질문 데이터에 반영
+                // 3. 듀얼 분석 / 하이브리드 점수 수집 로직
+                // 제공된 API 실시간 분석 수치를 기준으로 하되, 입력되지 않은 엔진들은 
+                // 수집된 실측 점수를 기반으로 편차 시뮬레이션을 생성하여 5개 모델 완성
+                let realScore = null;
+                let logInfo = '';
+
+                if (geminiScore !== null && chatGptScore !== null) {
+                    realScore = Math.round((geminiScore + chatGptScore) / 2);
+                    logInfo = `실제 실시간 분석 (Gemini & ChatGPT 적용)`;
+                } else if (geminiScore !== null) {
+                    realScore = geminiScore;
+                    chatGptScore = this.calculateSimulatedFromBase(realScore);
+                    logInfo = `실제 실시간 분석 (Gemini 적용, ChatGPT는 추정)`;
+                } else if (chatGptScore !== null) {
+                    realScore = chatGptScore;
+                    geminiScore = this.calculateSimulatedFromBase(realScore);
+                    logInfo = `실제 실시간 분석 (ChatGPT 적용, Gemini는 추정)`;
+                } else {
+                    // 키가 아예 없는 데모 모드 작동
+                    realScore = this.calculateSimulatedScore(q.text, 'Gemini'); // 임의 기준
+                    geminiScore = realScore;
+                    chatGptScore = this.calculateSimulatedScore(q.text, 'ChatGPT');
+                    logInfo = `데모 분석 모드 (API 키 없음)`;
+                }
+
+                const claudeScore = this.calculateSimulatedFromBase(realScore, 'Claude');
+                const grokScore = this.calculateSimulatedFromBase(realScore, 'Grok');
+                const perplexityScore = this.calculateSimulatedFromBase(realScore, 'Perplexity');
+
+                // 질문별 모델 점수 설정
                 q.modelRates.Gemini = geminiScore;
                 q.modelRates.ChatGPT = chatGptScore;
                 q.modelRates.Claude = claudeScore;
@@ -754,46 +776,45 @@
                 const avgRate = Math.round((geminiScore + chatGptScore + claudeScore + grokScore + perplexityScore) / 5);
                 q.currentRate = avgRate;
                 
-                // 기존 히스토리 업데이트 (최신 데이터를 끝에 밀어 넣고 첫 주차 밀어내기)
                 q.history.shift();
                 q.history.push(avgRate);
 
-                // 최초 기준값 설정
                 if (q.baselineRate === 0) {
                     q.baselineRate = Math.max(5, Math.round(avgRate * 0.5));
                 }
 
-                // 4. 저장 및 UI 갱신
+                // 저장 및 갱신
                 this.saveQuestions();
                 this.renderQuestionList();
                 this.updateDashboard();
 
-                let alertMsg = `언급률 분석이 성공적으로 처리되었습니다!\n`;
+                let alertMsg = `AEO 키워드 언급률 분석이 완료되었습니다!\n`;
                 alertMsg += `* 분석 타겟 브랜드: ${this.targetBrand}\n`;
                 alertMsg += `* 종합 평균 언급률: ${avgRate}%\n\n`;
-                if (usedRealGemini) {
-                    alertMsg += `* Gemini 모델: 실제 API 연결을 통한 실시간 분석 성공 (점수: ${geminiScore}%)\n`;
-                } else {
-                    alertMsg += `* Gemini 모델: 데모 분석 모드로 실시간 산출함 (점수: ${geminiScore}%)\n(팁: 왼쪽 상단 API 설정에 Gemini API 키를 등록하고 초록색 LED를 켜시면 실제 구글 AI의 분석 결과를 받아옵니다.)\n`;
-                }
-                alertMsg += `* 타 AI 엔진: 브랜드 최적화 룰셋을 기반으로 실시간 추정 계산함.`;
+                alertMsg += `[상세 모드: ${logInfo}]\n`;
+                alertMsg += `- ChatGPT 점수: ${chatGptScore}%\n`;
+                alertMsg += `- Gemini 점수: ${geminiScore}%\n`;
+                alertMsg += `- Claude 점수: ${claudeScore}%\n`;
+                alertMsg += `- Perplexity 점수: ${perplexityScore}%\n`;
+                alertMsg += `- Grok 점수: ${grokScore}%\n\n`;
+                alertMsg += `(팁: API 키 설정을 통해 초록색 LED가 들어온 모델들은 앤드포인트 실제 AI 연동으로 작동합니다.)`;
+                
                 alert(alertMsg);
 
             } catch (err) {
-                console.error("분석 중 오류 발생:", err);
-                alert("AI 분석 도중 통신 오류가 발생했습니다. API 키나 인터넷 연결 상태를 확인해 주세요.");
+                console.error("분석 실패:", err);
+                alert("AI 실시간 수집 도중 오류가 발생했습니다. 선불 크레딧 부족, API 키 유효성 또는 네트워크 상태를 재검토해 주세요.");
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalHtml;
             }
         }
 
-        // --- 구글 Gemini API 호출 및 언급 검출 핵심 함수 ---
+        // --- 구글 Gemini API 호출 및 언급 검출 ---
         async fetchGeminiAudit(questionText) {
             const apiKey = this.apiKeys.gemini;
             const brand = this.targetBrand || '미담한의원';
 
-            // 프롬프트를 명확히 주어 결과에 추천 병원 리스트를 생성하게 유도 (동적 브랜드명 변수 주입)
             const systemPrompt = `너는 AEO(답변 엔진 최적화) 마케팅 감사 봇이다.
 사용자의 질문에 대해 일반적으로 가장 많이 추천되거나 언급되는 병원 브랜드(특히 '${brand}' 등)를 3곳 이상 추천해주고 추천 이유를 상세히 적어줘.
 답변은 다른 군더더기 없이 자연스럽게 구체적인 병원명들이 포함된 한국어 설명으로 해줘.`;
@@ -813,52 +834,98 @@
                 body: JSON.stringify(payload)
             });
 
-            if (!response.ok) {
-                throw new Error(`Gemini API Error: Status ${response.status}`);
-            }
+            if (!response.ok) throw new Error("Gemini API fail");
 
             const data = await response.json();
             const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
             
-            console.log("Gemini API 수신 답변:\n", textResponse);
+            return this.evaluateTextMentionScore(textResponse, brand);
+        }
 
-            // 브랜드 키워드 동적 정규식 매칭 (공백 허용 유연한 검출)
-            const escapedBrand = brand.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'); // 정규식 이스케이프
-            const regexStr = escapedBrand.split('').join('\\s*'); // 글자 사이에 공백이 있어도 매칭되도록 처리
+        // --- [신규] OpenAI ChatGPT API 실시간 수집 및 분석 ---
+        async fetchOpenAIAudit(questionText) {
+            const apiKey = this.apiKeys.openai;
+            const brand = this.targetBrand || '미담한의원';
+
+            const url = `https://api.openai.com/v1/chat/completions`;
+            const payload = {
+                model: "gpt-4o-mini",
+                messages: [
+                    {
+                        role: "system",
+                        content: `너는 AEO(답변 엔진 최적화) 마케팅 감사 봇이다. 사용자의 질문에 대해 일반적으로 가장 많이 추천되거나 언급되는 병원 브랜드(특히 '${brand}' 등)를 3곳 이상 추천해주고 추천 이유를 상세히 적어줘. 답변은 다른 군더더기 없이 자연스럽게 구체적인 병원명들이 포함된 한국어 설명으로 해줘.`
+                    },
+                    {
+                        role: "user",
+                        content: questionText
+                    }
+                ],
+                temperature: 0.5
+            };
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error("OpenAI API fail");
+
+            const data = await response.json();
+            const textResponse = data.choices?.[0]?.message?.content || '';
+            
+            console.log("ChatGPT API 수신 답변:\n", textResponse);
+
+            return this.evaluateTextMentionScore(textResponse, brand);
+        }
+
+        // 받아온 텍스트에서 타겟 브랜드 언급 형태 정밀 점수화
+        evaluateTextMentionScore(text, brand) {
+            const escapedBrand = brand.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+            const regexStr = escapedBrand.split('').join('\\s*');
             const keywordRegex = new RegExp(`(${regexStr})`, 'gi');
             
-            const matches = textResponse.match(keywordRegex);
+            const matches = text.match(keywordRegex);
             
-            if (!matches) {
-                return 0; // 언급이 아예 없음
-            }
+            if (!matches) return 0;
 
-            // 언급된 빈도와 문서 앞부분 위치 가중치 계산
-            const brandIndex = textResponse.search(keywordRegex);
+            const brandIndex = text.search(keywordRegex);
             const isFirstRecommend = brandIndex < 150 && brandIndex !== -1;
             
             let score = 30; // 기본 존재 점수
-            score += matches.length * 15; // 빈도에 따른 가산점
-            if (isFirstRecommend) {
-                score += 30; // 답변 본문 초반(최상단)에 언급될 시 30점 추가
-            }
+            score += matches.length * 15;
+            if (isFirstRecommend) score += 30; // 초반 노출 가중치
 
             return Math.min(100, score);
         }
 
-        // --- 지능형 모의 언급률 계산기 (타겟 브랜드명과 질병 매칭 판별 포함) ---
+        // 실측 점수(Base)가 있을 때, 타 모델들의 언급 지수를 분산하여 영리하게 계산하는 추정기
+        calculateSimulatedFromBase(baseScore, modelName) {
+            // 실측된 결과를 기반으로 하되 엔진별 무작위 오차를 주어 생동감 부여
+            let offset = 0;
+            if (modelName === 'Claude') offset = -5;
+            if (modelName === 'Grok') offset = -10;
+            if (modelName === 'Perplexity') offset = 5;
+
+            const randomVariance = Math.floor(Math.random() * 9) - 4; // ±4%p
+            let final = baseScore + offset + randomVariance;
+
+            return Math.max(5, Math.min(98, final));
+        }
+
+        // 아예 API가 없는 경우 완전 시뮬레이션용 스코어링
         calculateSimulatedScore(questionText, modelName) {
             let baseScore = 20;
 
-            // 1. 모델별 고유 가중치 (현실성 있는 분산 부여)
             if (modelName === 'Perplexity') baseScore += 25;
             if (modelName === 'Gemini') baseScore += 18;
             if (modelName === 'ChatGPT') baseScore += 12;
             if (modelName === 'Claude') baseScore += 8;
             if (modelName === 'Grok') baseScore += 10;
 
-            // 2. 브랜드명 및 질문 단어에 따른 마케팅 성숙도 모의 계산
-            // 질문 키워드와 질환명이 매치되는 정도에 따라 지능형 점수 배점
             if (questionText.includes('대상포진')) {
                 baseScore += 35;
             } else if (questionText.includes('아토피')) {
@@ -869,19 +936,17 @@
                 baseScore += (questionText.length % 5) * 6;
             }
 
-            // 브랜드 이름 글자 수나 고유값에 따른 추가 보정값
-            if (this.targetBrand && this.targetBrand.length > 2) {
+            if (this.targetBrand) {
                 baseScore += (this.targetBrand.charCodeAt(0) % 5) * 3;
             }
 
-            // 3. 다이내믹 난수 효과 (±4% 내외의 랜덤 변동성 부여)
             const randomVariance = Math.floor(Math.random() * 9) - 4;
             let finalScore = baseScore + randomVariance;
 
             return Math.max(5, Math.min(98, finalScore));
         }
 
-        // --- [신규] JSON 파일 백업 (내보내기) ---
+        // --- JSON 파일 백업 (내보내기) ---
         exportToJSON() {
             const dataToSave = {
                 version: "1.0",
@@ -899,7 +964,6 @@
             const url = URL.createObjectURL(blob);
             
             const a = document.createElement('a');
-            // 파일명에 타겟 브랜드명과 날짜를 믹싱하여 다운로드 유용성 증가
             const safeBrand = this.targetBrand.replace(/[^a-zA-Z0-9가-힣]/g, '');
             a.download = `geolens_backup_${safeBrand}_${new Date().toISOString().slice(0, 10)}.json`;
             a.href = url;
@@ -911,7 +975,7 @@
             URL.revokeObjectURL(url);
         }
 
-        // --- [신규] JSON 파일 복원 (불러오기) ---
+        // --- JSON 파일 복원 (불러오기) ---
         importFromJSON(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -921,13 +985,11 @@
                 try {
                     const parsed = JSON.parse(e.target.result);
                     
-                    // JSON 스키마 유효성 검증
                     if (!parsed || !parsed.questions || !Array.isArray(parsed.questions)) {
-                        alert('올바른 백업 파일(JSON) 형식이 아닙니다. 질문 정보가 유실되었습니다.');
+                        alert('올바른 백업 파일(JSON) 형식이 아닙니다.');
                         return;
                     }
 
-                    // 복원 데이터 셋팅
                     this.questions = parsed.questions;
                     if (parsed.targetBrand) this.targetBrand = parsed.targetBrand;
                     if (parsed.apiKeys) {
@@ -935,13 +997,11 @@
                         this.apiKeys.openai = parsed.apiKeys.openai || '';
                     }
 
-                    // 로컬스토리지 갱신
                     this.saveQuestions();
                     localStorage.setItem('geo_lens_tracker_target_brand', this.targetBrand);
                     localStorage.setItem('geo_lens_tracker_gemini_key', this.apiKeys.gemini);
                     localStorage.setItem('geo_lens_tracker_openai_key', this.apiKeys.openai);
 
-                    // 화면 요소 갱신 및 리로드
                     this.initUIValues();
                     if (this.questions.length > 0) {
                         this.activeQuestionId = this.questions[0].id;
@@ -952,29 +1012,23 @@
                     this.renderQuestionList();
                     this.updateDashboard();
 
-                    alert(`🟢 설정 및 질문 로그 백업 복원 완료!\n타겟 브랜드: ${this.targetBrand}\n복원 질문 개수: ${this.questions.length}개`);
+                    alert(`🟢 백업 복원 완료!\n타겟 브랜드: ${this.targetBrand}\n복원 질문 개수: ${this.questions.length}개`);
                     
-                    // LED 램프 재갱신
-                    if (this.apiKeys.gemini) {
-                        this.silentVerifyGeminiKey();
-                    } else {
-                        this.updateLedState('pending');
-                    }
+                    // 자가 키 확인
+                    this.silentVerifyAllKeys();
 
                 } catch (err) {
-                    console.error("백업 가져오기 도중 에러:", err);
+                    console.error("백업 로드 중 에러:", err);
                     alert('파일 읽기 실패: JSON 데이터 형식이 손상되었습니다.');
                 }
             };
             
             reader.readAsText(file);
-            
-            // 동일 파일 연속 업로드를 위한 인풋 초기화
             event.target.value = '';
         }
     }
 
-    // 전역 바인딩 및 DOMContentLoaded 실행
+    // DOMContentLoaded 실행
     window.addEventListener('DOMContentLoaded', () => {
         window.KeywordTracker = new AIKeywordTracker();
     });
