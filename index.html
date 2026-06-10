@@ -843,11 +843,16 @@
 
                                 <!-- Detail Table -->
                                 <div class="glass-panel card table-card border-neon-purple">
-                                    <div class="card-header-flex">
+                                    <div class="card-header-flex" style="gap: 8px;">
                                         <h3 class="card-title" data-i18n="title_model_table">AI 모델별 언급률 상세</h3>
-                                        <button id="btn-run-audit" class="btn btn-sm btn-outline-purple btn-glow">
-                                            <i data-lucide="play"></i> 실시간 분석 실행
-                                        </button>
+                                        <div style="display: flex; gap: 8px;">
+                                            <button id="btn-view-raw-responses" class="btn btn-sm btn-outline-cyan btn-glow">
+                                                <i data-lucide="eye"></i> 실시간 AI 원본 답변 보기
+                                            </button>
+                                            <button id="btn-run-audit" class="btn btn-sm btn-outline-purple btn-glow">
+                                                <i data-lucide="play"></i> 실시간 분석 실행
+                                            </button>
+                                        </div>
                                     </div>
                                     <div class="table-wrapper">
                                         <table class="tracker-detail-table">
@@ -987,6 +992,40 @@
                 <button id="btn-reset-cancel" class="btn btn-outline-gray" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px;">
                     <i data-lucide="x"></i> 취소
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 실시간 AI 원본 답변 보기 모달 -->
+    <div class="modal-overlay" id="modal-raw-responses-overlay" style="display: none;">
+        <div class="modal-box glass-panel border-neon-cyan" style="max-width: 700px; padding: 0;">
+            <div class="modal-header" style="border-bottom: 1px solid rgba(0, 242, 254, 0.2);">
+                <h3 class="modal-title text-neon-cyan">
+                    <i data-lucide="eye" class="text-neon-cyan"></i>
+                    <span>실시간 AI 원본 답변 보기</span>
+                </h3>
+                <button class="btn-close-modal" id="btn-close-raw-modal"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <p class="modal-desc" style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+                    가장 최근에 수집된 실시간 분석 질문에 대한 각 AI 엔진별 원시 응답 문장입니다. RAG 주입 시의 검색 데이터 반영 상태와 실제 언급 여부를 확인할 수 있습니다.
+                </p>
+                <!-- AI 탭 메뉴 -->
+                <div class="raw-response-tabs" id="raw-tabs-container" style="display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; overflow-x: auto; white-space: nowrap;">
+                    <button class="tab-btn active" data-model="ChatGPT" style="background: transparent; border: none; color: var(--neon-cyan); padding: 6px 12px; cursor: pointer; font-size: 13px; font-weight: bold; border-bottom: 2px solid var(--neon-cyan);">ChatGPT</button>
+                    <button class="tab-btn" data-model="Gemini" style="background: transparent; border: none; color: var(--text-muted); padding: 6px 12px; cursor: pointer; font-size: 13px; font-weight: bold;">Gemini</button>
+                    <button class="tab-btn" data-model="Claude" style="background: transparent; border: none; color: var(--text-muted); padding: 6px 12px; cursor: pointer; font-size: 13px; font-weight: bold;">Claude</button>
+                    <button class="tab-btn" data-model="Grok" style="background: transparent; border: none; color: var(--text-muted); padding: 6px 12px; cursor: pointer; font-size: 13px; font-weight: bold;">Grok</button>
+                    <button class="tab-btn" data-model="Perplexity" style="background: transparent; border: none; color: var(--text-muted); padding: 6px 12px; cursor: pointer; font-size: 13px; font-weight: bold;">Perplexity</button>
+                    <button class="tab-btn" data-model="SearchContext" style="background: transparent; border: none; color: var(--text-muted); padding: 6px 12px; cursor: pointer; font-size: 13px; font-weight: bold; font-style: italic;">실시간 검색 컨텍스트 (RAG)</button>
+                </div>
+                <!-- 텍스트 영역 -->
+                <div class="raw-response-content">
+                    <textarea id="raw-response-textarea" class="textarea-dark input-block" rows="15" readonly style="font-family: monospace; font-size: 12px; line-height: 1.6; width: 100%; box-sizing: border-box; background: rgba(0, 0, 0, 0.4); border-color: rgba(0, 242, 254, 0.1);" placeholder="최근 분석된 실시간 데이터가 없거나, 해당 모델의 API 응답이 기록되지 않았습니다."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 12px 20px; background: rgba(0,0,0,0.2); border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
+                <button id="btn-close-raw-modal-bottom" class="btn btn-outline-cyan btn-sm" style="width: 80px; text-align: center; justify-content: center;">닫기</button>
             </div>
         </div>
     </div>

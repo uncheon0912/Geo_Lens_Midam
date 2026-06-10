@@ -34,6 +34,16 @@
                 active: false
             };
 
+            // 실시간 AI 원본 답변 캐싱용 객체
+            this.lastResponses = {
+                ChatGPT: '',
+                Gemini: '',
+                Claude: '',
+                Grok: '',
+                Perplexity: '',
+                SearchContext: ''
+            };
+
             if (window.Chart) {
                 Chart.defaults.color = '#94a3b8';
                 Chart.defaults.font.family = "'Inter', sans-serif";
@@ -81,6 +91,16 @@
                 }
             } catch (e) {
                 console.error("스케줄러 설정 로드 실패", e);
+            }
+
+            // AI 답변 원문 캐시 로드
+            try {
+                const storedResponses = localStorage.getItem('geo_lens_tracker_last_responses');
+                if (storedResponses) {
+                    this.lastResponses = JSON.parse(storedResponses);
+                }
+            } catch (e) {
+                console.error("마지막 AI 응답 데이터 로드 실패", e);
             }
         }
 
@@ -416,6 +436,55 @@
                     hideResetModal();
                 });
             }
+
+            // [신규] 실시간 AI 원본 답변 보기 모달 제어
+            const btnViewRaw = document.getElementById('btn-view-raw-responses');
+            const modalRawOverlay = document.getElementById('modal-raw-responses-overlay');
+            const btnCloseRaw = document.getElementById('btn-close-raw-modal');
+            const btnCloseRawBottom = document.getElementById('btn-close-raw-modal-bottom');
+            const rawTabs = document.querySelectorAll('#raw-tabs-container .tab-btn');
+            const rawTextarea = document.getElementById('raw-response-textarea');
+
+            if (btnViewRaw && modalRawOverlay) {
+                btnViewRaw.addEventListener('click', () => {
+                    modalRawOverlay.style.display = 'flex';
+                    // 현재 선택된 탭의 텍스트 로드
+                    const activeTab = document.querySelector('#raw-tabs-container .tab-btn.active');
+                    if (activeTab && rawTextarea) {
+                        const model = activeTab.getAttribute('data-model');
+                        rawTextarea.value = this.lastResponses[model] || '최근 분석된 실시간 데이터가 없거나, 해당 모델의 API 응답이 기록되지 않았습니다.';
+                    }
+                });
+            }
+
+            const hideRawModal = () => {
+                if (modalRawOverlay) modalRawOverlay.style.display = 'none';
+            };
+
+            if (btnCloseRaw) btnCloseRaw.addEventListener('click', hideRawModal);
+            if (btnCloseRawBottom) btnCloseRawBottom.addEventListener('click', hideRawModal);
+
+            // 탭 클릭 이벤트
+            rawTabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    // 모든 탭 비활성화
+                    rawTabs.forEach(t => {
+                        t.classList.remove('active');
+                        t.style.color = 'var(--text-muted)';
+                        t.style.borderBottom = 'none';
+                    });
+                    
+                    // 현재 탭 활성화
+                    tab.classList.add('active');
+                    tab.style.color = 'var(--neon-cyan)';
+                    tab.style.borderBottom = '2px solid var(--neon-cyan)';
+                    
+                    const model = tab.getAttribute('data-model');
+                    if (rawTextarea) {
+                        rawTextarea.value = this.lastResponses[model] || '최근 분석된 실시간 데이터가 없거나, 해당 모델의 API 응답이 기록되지 않았습니다.';
+                    }
+                });
+            });
         }
 
         // --- LED 상태 표시등 업데이트 ---
@@ -1061,11 +1130,20 @@
             }
 
             try {
-                // 1. Perplexity 실시간 웹 검색 원본 텍스트 수집 (RAG 컨텍스트 획득)
+                // 1. 실시간 웹 검색 원본 텍스트 수집 (RAG 컨텍스트 획득)
                 let perplexityContext = '';
                 if (this.apiKeys.perplexity) {
                     perplexityContext = await this.fetchPerplexityAuditRawText(q.text);
+                    this.lastResponses.Perplexity = perplexityContext;
+                } else {
+                    console.log("Perplexity API Key 없음 -> 무료 DuckDuckGo RAG 수집 시작");
+                    perplexityContext = await this.fetchWebSearchSnippets(q.text);
+                    this.lastResponses.Perplexity = "Perplexity API 키가 등록되지 않았습니다. (무료 DuckDuckGo 웹 검색 RAG 모드로 실행됨)";
                 }
+
+                // 수집된 검색 컨텍스트 캐싱 및 저장
+                this.lastResponses.SearchContext = perplexityContext || "실시간 웹 검색 결과가 비어 있거나 수집하지 못했습니다.";
+                localStorage.setItem('geo_lens_tracker_last_responses', JSON.stringify(this.lastResponses));
 
                 let geminiScore = 0;
                 let chatGptScore = 0;
@@ -1184,6 +1262,10 @@
             const data = await response.json();
             const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
             
+            // 캐시 수집
+            this.lastResponses.Gemini = textResponse;
+            localStorage.setItem('geo_lens_tracker_last_responses', JSON.stringify(this.lastResponses));
+            
             return this.evaluateTextMentionScore(textResponse, brand);
         }
 
@@ -1224,6 +1306,10 @@ ${context}
             const data = await response.json();
             const textResponse = data.choices?.[0]?.message?.content || '';
             
+            // 캐시 수집
+            this.lastResponses.ChatGPT = textResponse;
+            localStorage.setItem('geo_lens_tracker_last_responses', JSON.stringify(this.lastResponses));
+            
             return this.evaluateTextMentionScore(textResponse, brand);
         }
 
@@ -1256,6 +1342,10 @@ ${context}
             if (!response.ok) throw new Error("Perplexity API fail");
             const data = await response.json();
             const textResponse = data.choices?.[0]?.message?.content || '';
+            
+            // 캐시 수집
+            this.lastResponses.Perplexity = textResponse;
+            localStorage.setItem('geo_lens_tracker_last_responses', JSON.stringify(this.lastResponses));
             
             return this.evaluateTextMentionScore(textResponse, brand);
         }
@@ -1348,6 +1438,11 @@ ${context}
                 if (!response.ok) throw new Error("Claude API fail");
                 const data = await response.json();
                 const textResponse = data.content?.[0]?.text || '';
+                
+                // 캐시 수집
+                this.lastResponses.Claude = textResponse;
+                localStorage.setItem('geo_lens_tracker_last_responses', JSON.stringify(this.lastResponses));
+
                 return this.evaluateTextMentionScore(textResponse, brand);
             } catch (err) {
                 console.error("Claude API 호출 실패:", err);
@@ -1392,10 +1487,42 @@ ${context}
                 if (!response.ok) throw new Error("Grok API fail");
                 const data = await response.json();
                 const textResponse = data.choices?.[0]?.message?.content || '';
+                
+                // 캐시 수집
+                this.lastResponses.Grok = textResponse;
+                localStorage.setItem('geo_lens_tracker_last_responses', JSON.stringify(this.lastResponses));
+
                 return this.evaluateTextMentionScore(textResponse, brand);
             } catch (err) {
                 console.error("Grok API 호출 실패:", err);
                 return 0;
+            }
+        }
+
+        async fetchWebSearchSnippets(query) {
+            const targetUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+
+            try {
+                const response = await fetch(proxyUrl);
+                if (!response.ok) return '';
+                const htmlText = await response.text();
+                
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(htmlText, 'text/html');
+                const results = doc.querySelectorAll('.result__snippet');
+                
+                let snippets = [];
+                results.forEach((el, index) => {
+                    if (index < 10) {
+                        snippets.push(el.textContent.trim());
+                    }
+                });
+                
+                return snippets.join('\n\n');
+            } catch (err) {
+                console.error("무료 DuckDuckGo 웹 검색 결과 추출 실패:", err);
+                return '';
             }
         }
 
