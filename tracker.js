@@ -1216,6 +1216,12 @@
                 let alertMsg = `AEO/GEO 키워드 언급률 분석이 완료되었습니다!\n`;
                 alertMsg += `* 분석 타겟 브랜드: ${this.targetBrand}\n`;
                 alertMsg += `* 종합 평균 언급률: ${avgRate}%\n\n`;
+
+                // RAG 웹 검색 수집이 실패했을 경우 사용자 안내 주입
+                if (!this.apiKeys.perplexity && !actualRAGContext) {
+                    alertMsg += `⚠️ [경고] 실시간 웹 검색(RAG) 수집이 일시적인 프록시 차단 또는 네트워크 에러로 인해 실패했습니다. LLM 모델이 최신 정보를 반영하지 못해 언급률이 0%로 산출되었을 수 있으니, 대시보드의 [실시간 AI 원본 답변 보기] -> [실시간 검색 컨텍스트 (RAG)] 탭에서 상세 오류 로그를 확인해 주십시오.\n\n`;
+                }
+
                 alertMsg += `[상세 모드: ${logInfo}]\n`;
                 alertMsg += `- ChatGPT 점수 (실측): ${chatGptScore}%\n`;
                 alertMsg += `- Gemini 점수 (실측): ${geminiScore}%\n`;
@@ -1508,17 +1514,36 @@ ${context}
                 `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`
             ];
 
-            const proxies = [
-                (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-                (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+            // 프록시별 맞춤 경로 조합 빌더 정의
+            const proxyBuilders = [
+                {
+                    name: "corsproxy.io",
+                    build: (url) => `https://corsproxy.io/?${url}` // 인코딩하지 않고 원본 전달 시도
+                },
+                {
+                    name: "corsproxy.io (encoded)",
+                    build: (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`
+                },
+                {
+                    name: "codetabs.com",
+                    build: (url) => `https://api.codetabs.com/v1/proxy?url=${encodeURIComponent(url)}`
+                },
+                {
+                    name: "allorigins.win",
+                    build: (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+                },
+                {
+                    name: "thingproxy",
+                    build: (url) => `https://thingproxy.freeboard.io/fetch/${url}`
+                }
             ];
 
             let debugLog = [];
 
             for (const searchUrl of searchQueries) {
-                for (const proxyFn of proxies) {
-                    const fullUrl = proxyFn(searchUrl);
-                    debugLog.push(`[시도] URL: ${fullUrl}`);
+                for (const proxy of proxyBuilders) {
+                    const fullUrl = proxy.build(searchUrl);
+                    debugLog.push(`[시도] 프록시: ${proxy.name} | URL: ${fullUrl}`);
                     try {
                         const controller = new AbortController();
                         const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -1527,13 +1552,19 @@ ${context}
                         clearTimeout(timeoutId);
 
                         if (!response.ok) {
-                            debugLog.push(`-> HTTP 에러 발생: 상태 코드 ${response.status}`);
+                            debugLog.push(`-> HTTP 에러: 상태 코드 ${response.status}`);
                             continue;
                         }
                         const htmlText = await response.text();
                         
                         if (!htmlText || htmlText.length < 200) {
                             debugLog.push(`-> 응답 텍스트 길이 부족 (${htmlText ? htmlText.length : 0} 바이트)`);
+                            continue;
+                        }
+
+                        // 봇 감지 챌린지 문구 등이 수집되었는지 체크
+                        if (htmlText.includes("ddg-captcha") || htmlText.includes("robot") || htmlText.includes("automated access")) {
+                            debugLog.push(`-> 봇 감지 차단(Captcha) 발생`);
                             continue;
                         }
 
@@ -1575,20 +1606,22 @@ ${context}
                         }
 
                         if (snippets.length > 0) {
-                            debugLog.push(`-> 파싱 성공: ${snippets.length}개의 스니펫 추출 완료.`);
+                            debugLog.push(`-> 성공! (${proxy.name} 프록시 이용, ${snippets.length}개 스니펫 획득)`);
                             return snippets.join('\n\n');
                         } else {
-                            debugLog.push(`-> 파싱 결과 스니펫이 0개입니다.`);
+                            debugLog.push(`-> 파싱 결과 0개 스니펫`);
                         }
 
                     } catch (err) {
-                        debugLog.push(`-> 예외 에러 발생: ${err.message || err}`);
+                        debugLog.push(`-> 통신 예외 에러: ${err.message || err}`);
                     }
                 }
             }
 
             console.error("무료 웹 검색 결과 수집 전체 실패. 상세 로그:\n", debugLog.join('\n'));
-            return `[오류] 무료 웹 검색(RAG) 수집에 실패했습니다. 아래 상세 시도 로그를 참조하십시오.\n\n` + debugLog.join('\n');
+            return `[오류] 모든 CORS 프록시 및 DuckDuckGo 경로에서 검색 데이터를 수집하지 못했습니다.\n` +
+                   `네트워크 상태를 확인하시거나, 잠시 후 다시 실행해 주십시오.\n\n` +
+                   `※ 상세 시도 로그:\n` + debugLog.join('\n');
         }
 
         evaluateTextMentionScore(text, brand) {
