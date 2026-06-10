@@ -666,6 +666,12 @@
                             <h3 class="card-title" data-i18n="title_tracker_input">모니터링 질문 등록</h3>
                             <p class="card-desc" data-i18n="desc_tracker_input">네이버/구글 등에서 유입될 수 있는 핵심 질문 키워드를 등록합니다.</p>
                             
+                            <!-- 분석 타겟 브랜드명 설정 구역 -->
+                            <div class="form-group">
+                                <label for="target-brand-input" data-i18n="lbl_target_brand">분석 타겟 병원/브랜드명</label>
+                                <input type="text" id="target-brand-input" class="input-dark input-block" value="미담한의원" placeholder="예: 미담한의원">
+                            </div>
+
                             <!-- API Key Settings Section (Tucked cleanly inside) -->
                             <div class="tracker-api-box">
                                 <div class="api-toggle-header" id="api-toggle-btn">
@@ -674,14 +680,20 @@
                                 </div>
                                 <div class="api-inputs-wrapper" id="api-inputs-container" style="display: none;">
                                     <div class="form-group">
-                                        <label for="tracker-gemini-key">Gemini API Key</label>
+                                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+                                            <label for="tracker-gemini-key">Gemini API Key</label>
+                                            <span id="gemini-status-led" class="api-status-led status-pending" title="연결 상태: 대기"></span>
+                                        </div>
                                         <input type="password" id="tracker-gemini-key" class="input-dark input-block" placeholder="AIzaSy... (Gemini API 키 입력)">
                                     </div>
                                     <div class="form-group">
                                         <label for="tracker-openai-key">OpenAI API Key</label>
                                         <input type="password" id="tracker-openai-key" class="input-dark input-block" placeholder="sk-proj-... (선택 사항)">
                                     </div>
-                                    <button id="btn-save-tracker-keys" class="btn btn-sm btn-cyan btn-block">키 저장</button>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                        <button id="btn-save-tracker-keys" class="btn btn-sm btn-cyan">키 저장</button>
+                                        <button id="btn-test-tracker-keys" class="btn btn-sm btn-outline-purple">연결 테스트</button>
+                                    </div>
                                 </div>
                             </div>
                             
@@ -705,6 +717,21 @@
                                 <h4 class="section-subtitle" data-i18n="title_question_list">등록된 질문 목록</h4>
                                 <div id="tracker-question-list" class="question-list">
                                     <!-- Dynamic items will load here -->
+                                </div>
+                            </div>
+
+                            <hr class="neon-divider">
+
+                            <!-- Backup and Restore Actions -->
+                            <div class="tracker-backup-actions">
+                                <button id="btn-export-tracker" class="btn btn-sm btn-outline-cyan btn-block" style="margin-bottom: 8px;">
+                                    <i data-lucide="download"></i> <span data-i18n="btn_export_data">설정 파일 내보내기</span>
+                                </button>
+                                <div class="file-upload-wrapper" style="position: relative; overflow: hidden; display: inline-block; width: 100%;">
+                                    <button class="btn btn-sm btn-outline-purple btn-block">
+                                        <i data-lucide="upload"></i> <span data-i18n="btn_import_data">설정 파일 불러오기</span>
+                                    </button>
+                                    <input type="file" id="btn-import-tracker" accept=".json" style="position: absolute; font-size: 100px; opacity: 0; right: 0; top: 0; cursor: pointer; width: 100%; height: 100%;">
                                 </div>
                             </div>
                         </div>

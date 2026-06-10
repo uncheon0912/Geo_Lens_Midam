@@ -1764,6 +1764,26 @@ h1, h2, h3, h4, h5, h6 {
 /* ==========================================================================
    8-1. REALTIME AI KEYWORD TRACKER TAB
    ========================================================================== */
+.api-status-led {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+.api-status-led.status-pending {
+    background-color: var(--neon-yellow);
+    box-shadow: 0 0 6px var(--neon-yellow);
+}
+.api-status-led.status-connected {
+    background-color: var(--neon-green);
+    box-shadow: 0 0 6px var(--neon-green);
+}
+.api-status-led.status-error {
+    background-color: var(--neon-red);
+    box-shadow: 0 0 6px var(--neon-red);
+}
+
 .tracker-layout {
     display: grid;
     grid-template-columns: 350px 1fr;
@@ -1985,11 +2005,11 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .trend-summary-bar .summary-delta-value.positive {
-    color: var(--neon-green);
+    color: var(--neon-red);
 }
 
 .trend-summary-bar .summary-delta-value.negative {
-    color: var(--neon-red);
+    color: var(--neon-cyan);
 }
 
 .tracker-bottom-row {
@@ -2037,11 +2057,11 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .tracker-detail-table .change-cell.up {
-    color: var(--neon-green);
+    color: var(--neon-red);
 }
 
 .tracker-detail-table .change-cell.down {
-    color: var(--neon-red);
+    color: var(--neon-cyan);
 }
 
 .tracker-detail-table .change-cell.stable {
