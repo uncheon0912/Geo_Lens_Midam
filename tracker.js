@@ -23,7 +23,8 @@
             };
             this.apiKeys = {
                 gemini: '',
-                openai: ''
+                openai: '',
+                perplexity: ''
             };
             this.scheduler = {
                 email: '',
@@ -65,6 +66,7 @@
         loadSettings() {
             this.apiKeys.gemini = localStorage.getItem('geo_lens_tracker_gemini_key') || '';
             this.apiKeys.openai = localStorage.getItem('geo_lens_tracker_openai_key') || '';
+            this.apiKeys.perplexity = localStorage.getItem('geo_lens_tracker_perplexity_key') || '';
             this.targetBrand = localStorage.getItem('geo_lens_tracker_target_brand') || '미담한의원';
             
             // 이메일 스케줄러 로드
@@ -78,13 +80,15 @@
             }
         }
 
-        saveSettings(geminiKey, openaiKey, brandName) {
+        saveSettings(geminiKey, openaiKey, perplexityKey, brandName) {
             this.apiKeys.gemini = geminiKey.trim();
             this.apiKeys.openai = openaiKey.trim();
+            this.apiKeys.perplexity = perplexityKey.trim();
             this.targetBrand = brandName.trim() || '미담한의원';
 
             localStorage.setItem('geo_lens_tracker_gemini_key', this.apiKeys.gemini);
             localStorage.setItem('geo_lens_tracker_openai_key', this.apiKeys.openai);
+            localStorage.setItem('geo_lens_tracker_perplexity_key', this.apiKeys.perplexity);
             localStorage.setItem('geo_lens_tracker_target_brand', this.targetBrand);
         }
 
@@ -175,6 +179,7 @@
         initUIValues() {
             const geminiInput = document.getElementById('tracker-gemini-key');
             const openaiInput = document.getElementById('tracker-openai-key');
+            const perplexityInput = document.getElementById('tracker-perplexity-key');
             const brandInput = document.getElementById('target-brand-input');
             
             // 이메일 스케줄러 UI 바인딩
@@ -184,6 +189,7 @@
 
             if (geminiInput) geminiInput.value = this.apiKeys.gemini;
             if (openaiInput) openaiInput.value = this.apiKeys.openai;
+            if (perplexityInput) perplexityInput.value = this.apiKeys.perplexity;
             if (brandInput) brandInput.value = this.targetBrand;
             
             if (schedulerEmail) schedulerEmail.value = this.scheduler.email;
@@ -210,9 +216,10 @@
                 btnSaveKeys.addEventListener('click', () => {
                     const geminiKey = document.getElementById('tracker-gemini-key').value;
                     const openaiKey = document.getElementById('tracker-openai-key').value;
+                    const perplexityKey = document.getElementById('tracker-perplexity-key').value;
                     const brandName = document.getElementById('target-brand-input').value;
                     
-                    this.saveSettings(geminiKey, openaiKey, brandName);
+                    this.saveSettings(geminiKey, openaiKey, perplexityKey, brandName);
                     this.silentVerifyAllKeys();
                     
                     alert('설정이 안전하게 로컬에 보존되었습니다.');
@@ -358,7 +365,11 @@
 
         // --- LED 상태 표시등 업데이트 ---
         updateLedState(model, state) {
-            const ledId = model === 'gemini' ? 'gemini-status-led' : 'openai-status-led';
+            let ledId = '';
+            if (model === 'gemini') ledId = 'gemini-status-led';
+            else if (model === 'openai') ledId = 'openai-status-led';
+            else if (model === 'perplexity') ledId = 'perplexity-status-led';
+
             const led = document.getElementById(ledId);
             if (!led) return;
 
@@ -379,8 +390,9 @@
         async runConnectionTests() {
             const geminiKey = document.getElementById('tracker-gemini-key').value.trim();
             const openaiKey = document.getElementById('tracker-openai-key').value.trim();
+            const perplexityKey = document.getElementById('tracker-perplexity-key').value.trim();
 
-            if (!geminiKey && !openaiKey) {
+            if (!geminiKey && !openaiKey && !perplexityKey) {
                 alert('검증할 API Key를 하나 이상 입력해 주세요.');
                 return;
             }
@@ -403,6 +415,15 @@
                 results.push(`OpenAI API: ${res ? '🟢 성공' : '🔴 실패'}`);
             } else {
                 this.updateLedState('openai', 'pending');
+            }
+
+            if (perplexityKey) {
+                this.updateLedState('perplexity', 'pending');
+                const res = await this.verifyKeyRequest('perplexity', perplexityKey);
+                this.updateLedState('perplexity', res ? 'connected' : 'error');
+                results.push(`Perplexity API: ${res ? '🟢 성공' : '🔴 실패'}`);
+            } else {
+                this.updateLedState('perplexity', 'pending');
             }
 
             alert(`연결 테스트 결과:\n\n${results.join('\n')}\n\n실패로 표시된 모델은 키 유효 기간, 오타, 또는 잔액(Credit) 부족 현상일 수 있습니다.`);
@@ -433,6 +454,21 @@
                         })
                     });
                     return response.ok;
+                } else if (model === 'perplexity') {
+                    const url = `https://api.perplexity.ai/chat/completions`;
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${key}`
+                        },
+                        body: JSON.stringify({
+                            model: "sonar",
+                            messages: [{ role: "user", content: "Hello" }],
+                            max_tokens: 5
+                        })
+                    });
+                    return response.ok;
                 }
             } catch (err) {
                 console.error(`${model} 연결 오류:`, err);
@@ -453,6 +489,13 @@
                 this.updateLedState('openai', res ? 'connected' : 'error');
             } else {
                 this.updateLedState('openai', 'pending');
+            }
+
+            if (this.apiKeys.perplexity) {
+                const res = await this.verifyKeyRequest('perplexity', this.apiKeys.perplexity);
+                this.updateLedState('perplexity', res ? 'connected' : 'error');
+            } else {
+                this.updateLedState('perplexity', 'pending');
             }
         }
 
@@ -572,29 +615,40 @@
             if (banner) {
                 const hasGemini = !!this.apiKeys.gemini;
                 const hasOpenai = !!this.apiKeys.openai;
+                const hasPerplexity = !!this.apiKeys.perplexity;
 
-                if (!hasGemini && !hasOpenai) {
+                const liveKeysCount = (hasGemini ? 1 : 0) + (hasOpenai ? 1 : 0) + (hasPerplexity ? 1 : 0);
+
+                if (liveKeysCount === 0) {
                     banner.style.display = 'flex';
                     banner.className = 'demo-warning-banner demo-active';
                     banner.innerHTML = `
                         <i data-lucide="alert-triangle" style="width: 14px; height: 14px; flex-shrink: 0; margin-right: 4px;"></i>
-                        <span>⚠️ 현재 API 키 미등록 상태로 <strong>데모 모드(추정 데이터)</strong>로 동작하고 있습니다. 실제 AI 검색 결과에 따른 정확한 언급률을 반영하려면 왼쪽 하단에서 API Key를 입력하고 연결 테스트를 완료해 주세요.</span>
+                        <span>⚠️ 현재 API 키 미등록 상태로 <strong>데모 모드(추정 데이터)</strong>로 동작하고 있습니다. 실제 AI 검색 결과에 따른 정확한 언급률을 반영하려면 왼쪽 아래에서 API Key를 입력하고 연결 테스트를 완료해 주세요.</span>
                     `;
-                } else if (hasGemini && hasOpenai) {
+                } else if (liveKeysCount === 3) {
                     banner.style.display = 'flex';
                     banner.className = 'demo-warning-banner live-full';
                     banner.innerHTML = `
                         <i data-lucide="check-circle" style="width: 14px; height: 14px; flex-shrink: 0; margin-right: 4px;"></i>
-                        <span>🟢 ChatGPT와 Gemini의 <strong>실시간 API 실측 데이터</strong>가 대시보드에 적용되었습니다. (언급이 전혀 없는 모델은 0%로 정직하게 실측되며, 미지원 모델 또한 실측 데이터를 기반으로 0% 연동 처리됩니다)</span>
+                        <span>🟢 ChatGPT, Gemini, Perplexity의 <strong>실시간 API 실측 데이터</strong>가 대시보드에 적용되었습니다. (언급이 전혀 없는 모델은 0%로 정직하게 실측됩니다)</span>
                     `;
                 } else {
                     banner.style.display = 'flex';
                     banner.className = 'demo-warning-banner live-partial';
-                    const activeModel = hasGemini ? 'Gemini' : 'ChatGPT';
-                    const inactiveModel = hasGemini ? 'ChatGPT' : 'Gemini';
+                    const activeModels = [];
+                    if (hasOpenai) activeModels.push('ChatGPT');
+                    if (hasGemini) activeModels.push('Gemini');
+                    if (hasPerplexity) activeModels.push('Perplexity');
+                    
+                    const inactiveModels = [];
+                    if (!hasOpenai) inactiveModels.push('ChatGPT');
+                    if (!hasGemini) inactiveModels.push('Gemini');
+                    if (!hasPerplexity) inactiveModels.push('Perplexity');
+
                     banner.innerHTML = `
                         <i data-lucide="info" style="width: 14px; height: 14px; flex-shrink: 0; margin-right: 4px;"></i>
-                        <span>ℹ️ <strong>${activeModel}</strong>은 실시간 API 실측 데이터가 반영되며, 미등록된 <strong>${inactiveModel}</strong> 및 기타 모델은 실측 연동 추정치로 자동 조율됩니다. (언급이 없으면 0%로 정직하게 표기됩니다)</span>
+                        <span>ℹ️ <strong>${activeModels.join(', ')}</strong>는 실시간 API 실측 데이터가 반영되며, 미등록된 <strong>${inactiveModels.join(', ')}</strong> 및 기타 모델은 0%로 정직하게 표기됩니다.</span>
                     `;
                 }
 
@@ -666,6 +720,8 @@
                     statusBadge = this.apiKeys.openai ? '<span class="badge badge-live">실측</span>' : '<span class="badge badge-estimate">추정</span>';
                 } else if (model === 'Gemini') {
                     statusBadge = this.apiKeys.gemini ? '<span class="badge badge-live">실측</span>' : '<span class="badge badge-estimate">추정</span>';
+                } else if (model === 'Perplexity') {
+                    statusBadge = this.apiKeys.perplexity ? '<span class="badge badge-live">실측</span>' : '<span class="badge badge-estimate">추정</span>';
                 } else {
                     statusBadge = '<span class="badge badge-estimate">추정</span>';
                 }
@@ -867,6 +923,7 @@
             try {
                 let geminiScore = 0;
                 let chatGptScore = 0;
+                let perplexityScore = 0;
 
                 if (this.apiKeys.gemini) {
                     geminiScore = await this.fetchGeminiAudit(q.text);
@@ -874,29 +931,32 @@
                 if (this.apiKeys.openai) {
                     chatGptScore = await this.fetchOpenAIAudit(q.text);
                 }
+                if (this.apiKeys.perplexity) {
+                    perplexityScore = await this.fetchPerplexityAudit(q.text);
+                }
 
                 let logInfo = '';
-                if (this.apiKeys.gemini && this.apiKeys.openai) {
-                    logInfo = `실제 실시간 분석 (Gemini & ChatGPT 적용)`;
-                } else if (this.apiKeys.gemini) {
-                    logInfo = `실제 실시간 분석 (Gemini 적용, ChatGPT 미연동)`;
-                } else if (this.apiKeys.openai) {
-                    logInfo = `실제 실시간 분석 (ChatGPT 적용, Gemini 미연동)`;
-                } else {
+                let liveCount = 0;
+                if (this.apiKeys.gemini) { logInfo += 'Gemini 실측 | '; liveCount++; }
+                if (this.apiKeys.openai) { logInfo += 'ChatGPT 실측 | '; liveCount++; }
+                if (this.apiKeys.perplexity) { logInfo += 'Perplexity 실측 | '; liveCount++; }
+
+                if (liveCount === 0) {
                     logInfo = `실시간 분석 대기 (API 키 없음)`;
+                } else {
+                    logInfo = logInfo.slice(0, -3) + ' 적용';
                 }
 
                 // 사용자가 실측되지 않은 데이터에 대한 점수 부여를 절대 금지했으므로
-                // API 키가 없거나 미지원인 모델(Claude, Grok, Perplexity)은 전부 0%로 고정
+                // API 키가 없거나 미지원인 모델(Claude, Grok)은 전부 0%로 고정
                 const claudeScore = 0;
                 const grokScore = 0;
-                const perplexityScore = 0;
 
                 q.modelRates.Gemini = geminiScore;
                 q.modelRates.ChatGPT = chatGptScore;
+                q.modelRates.Perplexity = perplexityScore;
                 q.modelRates.Claude = claudeScore;
                 q.modelRates.Grok = grokScore;
-                q.modelRates.Perplexity = perplexityScore;
 
                 const avgRate = Math.round((geminiScore + chatGptScore + claudeScore + grokScore + perplexityScore) / 5);
                 q.currentRate = avgRate;
@@ -920,14 +980,14 @@
                     this.sendMailWebhook(q);
                 }
 
-                let alertMsg = `AEO 키워드 언급률 분석이 완료되었습니다!\n`;
+                let alertMsg = `AEO/GEO 키워드 언급률 분석이 완료되었습니다!\n`;
                 alertMsg += `* 분석 타겟 브랜드: ${this.targetBrand}\n`;
                 alertMsg += `* 종합 평균 언급률: ${avgRate}%\n\n`;
                 alertMsg += `[상세 모드: ${logInfo}]\n`;
                 alertMsg += `- ChatGPT 점수 (실측): ${chatGptScore}%\n`;
                 alertMsg += `- Gemini 점수 (실측): ${geminiScore}%\n`;
+                alertMsg += `- Perplexity 점수 (실측): ${perplexityScore}%\n`;
                 alertMsg += `- Claude 점수 (미지원/미연동): ${claudeScore}%\n`;
-                alertMsg += `- Perplexity 점수 (미지원/미연동): ${perplexityScore}%\n`;
                 alertMsg += `- Grok 점수 (미지원/미연동): ${grokScore}%\n\n`;
                 alertMsg += `(※ 실측되지 않은 데이터는 사기 없는 분석을 위해 점수를 전혀 부여하지 않고 0% 처리되었습니다.)`;
                 
@@ -1008,22 +1068,77 @@
             return this.evaluateTextMentionScore(textResponse, brand);
         }
 
+        async fetchPerplexityAudit(questionText) {
+            const apiKey = this.apiKeys.perplexity;
+            const brand = this.targetBrand || '미담한의원';
+
+            const url = `https://api.perplexity.ai/chat/completions`;
+            const payload = {
+                model: "sonar", // Perplexity 최신 실시간 웹 검색 sonar 모델
+                messages: [
+                    {
+                        role: "system",
+                        content: `너는 질문에 답하는 AI 검색 엔진이다. 사용자의 질문에 대해 실시간 인터넷 검색 지식을 기반으로 일반적으로 추천되거나 많이 거론되는 한의원/병원명을 3곳 내외로 추천하고 구체적인 이유를 상세히 적어줘. 특정 병원을 억지로 추천하도록 편향을 두지 말고, 실제 검색 데이터에 입각하여 사실 정보만을 담아 자연스럽게 설명해줘.`
+                    },
+                    { role: "user", content: questionText }
+                ],
+                temperature: 0.5
+            };
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error("Perplexity API fail");
+            const data = await response.json();
+            const textResponse = data.choices?.[0]?.message?.content || '';
+            
+            return this.evaluateTextMentionScore(textResponse, brand);
+        }
+
         evaluateTextMentionScore(text, brand) {
+            if (!text || !brand) return 0;
+            
+            // 1차 매칭: 전체 브랜드명 (공백 유연 매칭)
             const escapedBrand = brand.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
             const regexStr = escapedBrand.split('').join('\\s*');
             const keywordRegex = new RegExp(`(${regexStr})`, 'gi');
             
-            const matches = text.match(keywordRegex);
-            if (!matches) return 0;
+            let matches = text.match(keywordRegex);
+            let score = 0;
+            let isFirstRecommend = false;
 
-            const brandIndex = text.search(keywordRegex);
-            const isFirstRecommend = brandIndex < 150 && brandIndex !== -1;
-            
-            let score = 30;
-            score += matches.length * 15;
-            if (isFirstRecommend) score += 30;
+            if (matches) {
+                const brandIndex = text.search(keywordRegex);
+                isFirstRecommend = brandIndex < 150 && brandIndex !== -1;
+                score = 30 + matches.length * 15;
+                if (isFirstRecommend) score += 30;
+                return Math.min(100, score);
+            }
 
-            return Math.min(100, score);
+            // 2차 매칭: 부분 매칭 (예: '지유클리닉 강남본점' -> '지유클리닉' 또는 '지유' 등 핵심 키워드 매칭 지원)
+            const cleanBrand = brand.replace(/(강남본점|본점|지점|의원|한의원|클리닉|성형외과|피부과)/g, '').trim();
+            if (cleanBrand.length >= 2) {
+                const escapedSub = cleanBrand.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                const subRegexStr = escapedSub.split('').join('\\s*');
+                const subRegex = new RegExp(`(${subRegexStr})`, 'gi');
+                
+                const subMatches = text.match(subRegex);
+                if (subMatches) {
+                    const subIndex = text.search(subRegex);
+                    isFirstRecommend = subIndex < 180 && subIndex !== -1;
+                    score = 20 + subMatches.length * 10;
+                    if (isFirstRecommend) score += 20;
+                    return Math.min(100, score);
+                }
+            }
+
+            return 0;
         }
 
         calculateSimulatedFromBase(baseScore, modelName) {
@@ -1107,7 +1222,8 @@
                 questions: this.questions,
                 apiKeys: {
                     gemini: this.apiKeys.gemini,
-                    openai: this.apiKeys.openai
+                    openai: this.apiKeys.openai,
+                    perplexity: this.apiKeys.perplexity
                 },
                 scheduler: this.scheduler
             };
@@ -1148,6 +1264,7 @@
                     if (parsed.apiKeys) {
                         this.apiKeys.gemini = parsed.apiKeys.gemini || '';
                         this.apiKeys.openai = parsed.apiKeys.openai || '';
+                        this.apiKeys.perplexity = parsed.apiKeys.perplexity || '';
                     }
                     if (parsed.scheduler) this.scheduler = parsed.scheduler;
 
@@ -1155,6 +1272,7 @@
                     localStorage.setItem('geo_lens_tracker_target_brand', this.targetBrand);
                     localStorage.setItem('geo_lens_tracker_gemini_key', this.apiKeys.gemini);
                     localStorage.setItem('geo_lens_tracker_openai_key', this.apiKeys.openai);
+                    localStorage.setItem('geo_lens_tracker_perplexity_key', this.apiKeys.perplexity);
                     this.saveSchedulerSettings();
 
                     this.initUIValues();

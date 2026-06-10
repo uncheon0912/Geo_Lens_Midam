@@ -700,7 +700,14 @@
                                         </div>
                                         <input type="password" id="tracker-openai-key" class="input-dark input-block" placeholder="sk-proj-... (선택 사항)">
                                     </div>
-                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                    <div class="form-group" style="margin-top: 10px;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+                                            <label for="tracker-perplexity-key">Perplexity API Key</label>
+                                            <span id="perplexity-status-led" class="api-status-led status-pending" title="연결 상태: 대기"></span>
+                                        </div>
+                                        <input type="password" id="tracker-perplexity-key" class="input-dark input-block" placeholder="pplx-... (실시간 웹 검색 실측용)">
+                                    </div>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px;">
                                         <button id="btn-save-tracker-keys" class="btn btn-sm btn-cyan">키 저장</button>
                                         <button id="btn-test-tracker-keys" class="btn btn-sm btn-outline-purple">연결 테스트</button>
                                     </div>
