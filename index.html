@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geo Lens Midam - AI & AEO Web Audit Dashboard</title>
+    <!-- Google Fonts: Inter (UI text) & Orbitron (Cyberpunk headings) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons (SVG-based lightweight icons) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="neon-dark-theme">
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i data-lucide="shield-check" class="neon-glow-icon cyan"></i>
+                    <span class="logo-text">Geo Lens <span class="neon-text-magenta">Midam</span></span>
+                </div>
+                <div class="logo-subtitle">AEO & GEO Audit Engine</div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#dashboard" class="nav-item active" data-tab="dashboard">
+                    <i data-lucide="layout-dashboard"></i>
+                    <span data-i18n="menu_dashboard">대시보드</span>
+                </a>
+                <a href="#headings" class="nav-item" data-tab="headings">
+                    <i data-lucide="heading"></i>
+                    <span data-i18n="menu_headings">제목 구조 (HN)</span>
+                </a>
+                <a href="#images" class="nav-item" data-tab="images">
+                    <i data-lucide="image"></i>
+                    <span data-i18n="menu_images">이미지 최적화</span>
+                </a>
+                <a href="#technical" class="nav-item" data-tab="technical">
+                    <i data-lucide="cpu"></i>
+                    <span data-i18n="menu_technical">기술적 분석</span>
+                </a>
+                <a href="#geo" class="nav-item" data-tab="geo">
+                    <i data-lucide="search-code"></i>
+                    <span data-i18n="menu_geo">AI 검색 준비도 (GEO)</span>
+                </a>
+                <a href="#schema" class="nav-item" data-tab="schema">
+                    <i data-lucide="code-2"></i>
+                    <span data-i18n="menu_schema">구조화된 데이터 (스키마)</span>
+                </a>
+                <a href="#assistant" class="nav-item" data-tab="assistant">
+                    <i data-lucide="bot"></i>
+                    <span data-i18n="menu_assistant">AI 어시스턴트</span>
+                </a>
+                <a href="#settings" class="nav-item" data-tab="settings">
+                    <i data-lucide="settings"></i>
+                    <span data-i18n="menu_settings">설정</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button id="btn-pdf-audit" class="btn btn-primary btn-block btn-neon-purple">
+                    <i data-lucide="file-text"></i>
+                    <span data-i18n="btn_pdf_report">PDF 보고서 내보내기</span>
+                </button>
+                <div class="privacy-note">
+                    <i data-lucide="shield-alert"></i>
+                    <span data-i18n="txt_privacy_secured">개인정보 보호 모드 작동 중</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="main-content">
+            <!-- Top Action Bar -->
+            <header class="top-bar glass-panel">
+                <div class="search-container">
+                    <div class="input-wrapper">
+                        <i data-lucide="globe" class="input-icon"></i>
+                        <input type="text" id="target-url" placeholder="분석할 웹페이지 주소를 입력하세요 (예: https://example.com)" value="https://midam.io/blog/aeo-optimization-guide">
+                    </div>
+                    <button id="btn-analyze" class="btn btn-cyan btn-glow">
+                        <i data-lucide="sparkles"></i>
+                        <span data-i18n="btn_analyze">분석 시작</span>
+                    </button>
+                    <button id="btn-paste-html" class="btn btn-outline-purple">
+                        <i data-lucide="file-code"></i>
+                        <span data-i18n="btn_paste_html">HTML 소스 직접 입력</span>
+                    </button>
+                </div>
+                
+                <div class="lang-selector-wrapper">
+                    <i data-lucide="languages"></i>
+                    <select id="lang-select" class="select-dark">
+                        <option value="ko" selected>한국어</option>
+                        <option value="en">English</option>
+                        <option value="ja">日本語</option>
+                        <option value="zh">简体中文</option>
+                        <option value="fr">Français</option>
+                        <option value="de">Deutsch</option>
+                        <option value="es">Español</option>
+                        <option value="pt">Português</option>
+                        <option value="it">Italiano</option>
+                        <option value="ru">Русский</option>
+                        <option value="vi">Tiếng Việt</option>
+                        <option value="id">Bahasa Indonesia</option>
+                    </select>
+                </div>
+            </header>
+
+            <!-- Active URL Info & Page Badges -->
+            <section class="url-info-section" style="display: none;" id="url-info-bar">
+                <div class="url-display">
+                    <span class="status-indicator active-glow"></span>
+                    <span class="url-text" id="analyzed-url-text">https://example.com</span>
+                </div>
+                <div class="badge-container" id="detected-badges">
+                    <span class="badge badge-cyan" id="badge-page-type">BLOG POST</span>
+                    <span class="badge badge-purple" id="badge-audience">INFORMATIONAL</span>
+                    <span class="badge badge-green" id="badge-schema-status">JSON-LD DETECTED</span>
+                </div>
+            </section>
+
+            <!-- Dashboard Content Panels -->
+            <div class="tab-content-container">
+                
+                <!-- 1. DASHBOARD VIEW -->
+                <div id="view-dashboard" class="tab-pane active">
+                    <!-- Main KPI Grid -->
+                    <div class="dashboard-kpi-grid">
+                        <!-- Score Meter Card -->
+                        <div class="glass-panel card score-card border-neon-cyan">
+                            <h3 class="card-title" data-i18n="title_geo_score">종합 AI 검색 준비도 (GEO Score)</h3>
+                            <div class="score-display-wrapper">
+                                <div class="score-radial-container">
+                                    <svg viewBox="0 0 100 100" class="radial-svg">
+                                        <circle cx="50" cy="50" r="40" class="bg-circle" />
+                                        <circle cx="50" cy="50" r="40" class="progress-circle stroke-neon-cyan" id="geo-score-circle" stroke-dasharray="251.2" stroke-dashoffset="251.2" />
+                                    </svg>
+                                    <div class="score-text-center">
+                                        <span class="score-number" id="geo-score-value">0</span>
+                                        <span class="score-label">GEO</span>
+                                    </div>
+                                </div>
+                                <div class="score-meta-details">
+                                    <div class="score-status" id="geo-score-status" data-i18n="status_unanalyzed">분석 대기 중</div>
+                                    <p class="score-desc" id="geo-score-desc" data-i18n="desc_unanalyzed">웹페이지 주소를 입력하고 분석을 클릭하거나 HTML 코드를 넣어 시작하세요.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Page Classification Summary -->
+                        <div class="glass-panel card page-profile-card border-neon-purple">
+                            <h3 class="card-title" data-i18n="title_page_profile">AI 진단 요약 및 타겟 프로필</h3>
+                            <div class="page-profile-body">
+                                <div class="profile-item">
+                                    <div class="profile-icon purple-glow"><i data-lucide="layout"></i></div>
+                                    <div class="profile-details">
+                                        <div class="profile-label" data-i18n="lbl_page_category">페이지 대분류</div>
+                                        <div class="profile-value" id="profile-category">-</div>
+                                    </div>
+                                </div>
+                                <div class="profile-item">
+                                    <div class="profile-icon cyan-glow"><i data-lucide="activity"></i></div>
+                                    <div class="profile-details">
+                                        <div class="profile-label" data-i18n="lbl_readability">본문 가독성 수준</div>
+                                        <div class="profile-value" id="profile-readability">-</div>
+                                    </div>
+                                </div>
+                                <div class="profile-item">
+                                    <div class="profile-icon green-glow"><i data-lucide="database"></i></div>
+                                    <div class="profile-details">
+                                        <div class="profile-label" data-i18n="lbl_schema_type">스키마 감지 종류</div>
+                                        <div class="profile-value" id="profile-schema">-</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Four Pillar Score Indicators -->
+                    <div class="metric-pillars-grid">
+                        <div class="glass-panel card metric-pillar-card">
+                            <div class="pillar-header">
+                                <span class="pillar-title" data-i18n="pillar_citeability">MiDAM - SGA (SEO | GEO | AEO) 지수</span>
+                                <span class="pillar-score" id="score-pillar-citeability">0/25</span>
+                            </div>
+                            <div class="progress-bar-container bg-dark">
+                                <div class="progress-fill fill-cyan" id="fill-pillar-citeability" style="width: 0%;"></div>
+                            </div>
+                            <p class="pillar-desc" data-i18n="desc_pillar_citeability">구조적 문장 구성, 핵심 답변 매칭율, 리스트 밀도를 종합한 SEO/GEO/AEO 최적화 지표</p>
+                        </div>
+                        
+                        <div class="glass-panel card metric-pillar-card">
+                            <div class="pillar-header">
+                                <span class="pillar-title" data-i18n="pillar_eeat">EEAT-S 검증 (EEAT Authority Trust Shield)</span>
+                                <span class="pillar-score" id="score-pillar-eeat">0/25</span>
+                            </div>
+                            <div class="progress-bar-container bg-dark">
+                                <div class="progress-fill fill-purple" id="fill-pillar-eeat" style="width: 0%;"></div>
+                            </div>
+                            <p class="pillar-desc" data-i18n="desc_pillar_eeat">작성자 공인 프로필 연동, 콘텐츠 투명성, 발행 기관 신뢰 증명 보호막</p>
+                        </div>
+
+                        <div class="glass-panel card metric-pillar-card">
+                            <div class="pillar-header">
+                                <span class="pillar-title" data-i18n="pillar_multimodal">MDR 최적화 지표 (Multimodal Document Representation)</span>
+                                <span class="pillar-score" id="score-pillar-multimodal">0/25</span>
+                            </div>
+                            <div class="progress-bar-container bg-dark">
+                                <div class="progress-fill fill-green" id="fill-pillar-multimodal" style="width: 0%;"></div>
+                            </div>
+                            <p class="pillar-desc" data-i18n="desc_pillar_multimodal">이미지 시각 맥락 분석(Alt 속성 정밀도) 및 문맥 적합 아웃바운드 링크 설계도</p>
+                        </div>
+
+                        <div class="glass-panel card metric-pillar-card">
+                            <div class="pillar-header">
+                                <span class="pillar-title" data-i18n="pillar_technical">GEP 지수 (Generative Engine Penetration)</span>
+                                <span class="pillar-score" id="score-pillar-technical">0/25</span>
+                            </div>
+                            <div class="progress-bar-container bg-dark">
+                                <div class="progress-fill fill-yellow" id="fill-pillar-technical" style="width: 0%;"></div>
+                            </div>
+                            <p class="pillar-desc" data-i18n="desc_pillar_technical">AI 크롤러의 사이트 탐색 허용 범위, 엔티티 스키마 설계 적합도</p>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Subsections Grid -->
+                    <div class="dashboard-detailed-grid">
+                        <!-- AEO Checklist -->
+                        <div class="glass-panel card full-width-card">
+                            <h3 class="card-title">
+                                <i data-lucide="check-square" class="neon-glow-icon green"></i>
+                                <span data-i18n="title_aeo_checklist">AEO 최적화 핵심 체크리스트</span>
+                            </h3>
+                            <div class="checklist-items" id="dashboard-aeo-checklist">
+                                <div class="empty-state-notice" data-i18n="txt_empty_analyze_first">페이지를 분석하면 상세 체크리스트 항목이 노출됩니다.</div>
+                            </div>
+                        </div>
+
+                        <!-- Structured Data Detection Info -->
+                        <div class="glass-panel card">
+                            <h3 class="card-title">
+                                <i data-lucide="database" class="neon-glow-icon purple"></i>
+                                <span data-i18n="title_detected_schema">감지된 스키마 마크업</span>
+                            </h3>
+                            <div class="schema-detect-summary" id="dashboard-schema-summary">
+                                <div class="empty-state-notice" data-i18n="txt_empty_analyze_first">페이지를 분석하면 스키마 통계가 출력됩니다.</div>
+                            </div>
+                        </div>
+
+                        <!-- Crawler Status Quick Peek -->
+                        <div class="glass-panel card">
+                            <h3 class="card-title">
+                                <i data-lucide="bot" class="neon-glow-icon cyan"></i>
+                                <span data-i18n="title_crawler_permissions">주요 AI 봇 크롤러 권한</span>
+                            </h3>
+                            <div class="crawler-bar-summary" id="dashboard-crawler-summary">
+                                <div class="empty-state-notice" data-i18n="txt_empty_analyze_first">페이지를 분석하면 크롤러 접근 결과가 출력됩니다.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. HEADINGS STRUCTURE VIEW (HN) -->
+                <div id="view-headings" class="tab-pane">
+                    <div class="glass-panel card header-overview-card border-neon-cyan">
+                        <h3 class="card-title" data-i18n="title_heading_structure">HTML 제목 태그 계층 구조 (H1 ~ H6)</h3>
+                        <p class="card-desc" data-i18n="desc_heading_structure">제목 태그의 유무와 계층적 정렬을 분석합니다. H1의 중복 사용이나 상위 수준 건너뛰기는 AI의 문서 의미 맥락 파악을 저해합니다.</p>
+                        
+                        <div class="heading-badge-stats" id="heading-tags-counts">
+                            <span class="heading-stat-badge h1-badge">H1: <strong id="cnt-h1">0</strong></span>
+                            <span class="heading-stat-badge h2-badge">H2: <strong id="cnt-h2">0</strong></span>
+                            <span class="heading-stat-badge h3-badge">H3: <strong id="cnt-h3">0</strong></span>
+                            <span class="heading-stat-badge h4-badge">H4: <strong id="cnt-h4">0</strong></span>
+                            <span class="heading-stat-badge h5-badge">H5: <strong id="cnt-h5">0</strong></span>
+                            <span class="heading-stat-badge h6-badge">H6: <strong id="cnt-h6">0</strong></span>
+                        </div>
+                    </div>
+
+                    <div class="headings-layout-container">
+                        <!-- Left Panel: Hierarchical tree -->
+                        <div class="glass-panel card outline-tree-card">
+                            <h4 class="section-subtitle" data-i18n="subtitle_heading_outline">페이지 헤딩 아웃라인 구조</h4>
+                            <div class="outline-tree-list" id="headings-tree-list">
+                                <div class="empty-state-notice" data-i18n="txt_empty_analyze_first">페이지를 분석하면 아웃라인이 렌더링됩니다.</div>
+                            </div>
+                        </div>
+
+                        <!-- Right Panel: Meta Audit & Rules -->
+                        <div class="glass-panel card outline-rules-card">
+                            <h4 class="section-subtitle" data-i18n="subtitle_heading_rules">헤더 가이드 및 권고사항</h4>
+                            <div class="rules-feedback-list" id="headings-rules-feedback">
+                                <div class="empty-state-notice" data-i18n="txt_empty_analyze_first">페이지를 분석하면 가이드라인이 표시됩니다.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. IMAGES OPTIMIZATION VIEW -->
+                <div id="view-images" class="tab-pane">
+                    <div class="images-stats-grid">
+                        <div class="glass-panel card image-stat-box">
+                            <div class="stat-num" id="img-stat-total">0</div>
+                            <div class="stat-label" data-i18n="lbl_total_images">총 이미지 수</div>
+                        </div>
+                        <div class="glass-panel card image-stat-box">
+                            <div class="stat-num text-neon-green" id="img-stat-has-alt">0</div>
+                            <div class="stat-label" data-i18n="lbl_alt_present">Alt 태그 존재</div>
+                        </div>
+                        <div class="glass-panel card image-stat-box">
+                            <div class="stat-num text-neon-red" id="img-stat-no-alt">0</div>
+                            <div class="stat-label" data-i18n="lbl_alt_missing">Alt 태그 누락</div>
+                        </div>
+                        <div class="glass-panel card image-stat-box">
+                            <div class="stat-num text-neon-purple" id="img-stat-webp-savings">0%</div>
+                            <div class="stat-label" data-i18n="lbl_potential_webp">차세대 포맷 사용 가능</div>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel card image-list-card">
+                        <h3 class="card-title" data-i18n="title_image_alt_list">이미지Alt 텍스트 분석 상세</h3>
+                        <p class="card-desc" data-i18n="desc_image_alt_list">멀티모달 AI(예: GPT-4o, Gemini 1.5 Pro)는 이미지의 alt 속성을 읽어 텍스트와 이미지의 맥락을 연결합니다. 정확한 묘사는 인용율을 높입니다.</p>
+                        
+                        <div class="table-responsive">
+                            <table class="data-table neon-table" id="images-data-table">
+                                <thead>
+                                    <tr>
+                                        <th data-i18n="th_preview">미리보기</th>
+                                        <th data-i18n="th_filename">파일명/경로</th>
+                                        <th data-i18n="th_format">포맷</th>
+                                        <th data-i18n="th_alt_text">Alt 설명 속성</th>
+                                        <th data-i18n="th_status">상태</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="images-table-body">
+                                    <tr>
+                                        <td colspan="5" class="empty-table-cell" data-i18n="txt_empty_analyze_first">페이지를 분석하면 이미지 정보가 로드됩니다.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. TECHNICAL ANALYSIS VIEW -->
+                <div id="view-technical" class="tab-pane">
+                    <!-- Technical Overview Checklist Panels -->
+                    <div class="technical-row">
+                        <div class="glass-panel card tech-checklist-card">
+                            <h3 class="card-title">
+                                <i data-lucide="shield-check" class="neon-glow-icon green"></i>
+                                <span data-i18n="title_tech_seo_audit">기본 SEO 기술 요구 규격</span>
+                            </h3>
+                            <ul class="tech-checklist" id="tech-seo-checklist-list">
+                                <li class="empty-state-notice" data-i18n="txt_empty_analyze_first">분석을 먼저 수행하십시오.</li>
+                            </ul>
+                        </div>
+
+                        <div class="glass-panel card tech-checklist-card">
+                            <h3 class="card-title">
+                                <i data-lucide="gauge" class="neon-glow-icon cyan"></i>
+                                <span data-i18n="title_page_performance">페이지 리소스 및 구성 요소</span>
+                            </h3>
+                            <div class="performance-metrics" id="tech-perf-metrics">
+                                <div class="empty-state-notice" data-i18n="txt_empty_analyze_first">분석을 먼저 수행하십시오.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Meta Tags Detail panel -->
+                    <div class="glass-panel card tech-meta-card border-neon-purple">
+                        <h3 class="card-title">
+                            <i data-lucide="tags" class="neon-glow-icon purple"></i>
+                            <span data-i18n="title_metadata_analysis">메타데이터(SEO/SNS) 설정 값 검사</span>
+                        </h3>
+                        <div class="table-responsive">
+                            <table class="data-table neon-table" id="meta-tags-table">
+                                <thead>
+                                    <tr>
+                                        <th data-i18n="th_meta_tag_name">메타 태그명</th>
+                                        <th data-i18n="th_meta_content">설정값 (Content)</th>
+                                        <th data-i18n="th_length">길이</th>
+                                        <th data-i18n="th_status">상태 피드백</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="meta-table-body">
+                                    <tr>
+                                        <td colspan="4" class="empty-table-cell" data-i18n="txt_empty_analyze_first">페이지를 분석하면 메타 태그가 로드됩니다.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. GEO / AI SEARCH READY DETAIL VIEW -->
+                <div id="view-geo" class="tab-pane">
+                    <div class="geo-tab-layout">
+                        <!-- Left Panel: 7 GEO Indicators breakdown -->
+                        <div class="glass-panel card geo-indicators-card border-neon-cyan">
+                            <h3 class="card-title" data-i18n="title_geo_metrics_breakdown">7대 GEO 정밀 지표 진단</h3>
+                            <div class="geo-indicators-list" id="geo-indicators-detail-list">
+                                <!-- Generated Dynamically -->
+                                <div class="empty-state-notice" data-i18n="txt_empty_analyze_first">페이지를 분석하면 세부 지표가 로드됩니다.</div>
+                            </div>
+                        </div>
+
+                        <!-- Right Panel: Snippet Extractability and recommendations -->
+                        <div class="glass-panel card geo-snippets-card border-neon-purple">
+                            <h3 class="card-title" data-i18n="title_snippet_extractability">인용 스니펫 추출 가능성 진단</h3>
+                            <p class="card-desc" data-i18n="desc_snippet_extractability">AI 답변 엔진이 페이지 본문에서 정답 또는 핵심 요약 스니펫(Snippet)으로 발췌하기에 용이한 문단들을 분석합니다.</p>
+                            
+                            <div class="snippet-highlight-box" id="snippet-analysis-zone">
+                                <div class="empty-state-notice" data-i18n="txt_empty_analyze_first">페이지를 분석하면 발췌 가능 점수와 문단이 하이라이팅됩니다.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AI Bot Permissions Details -->
+                    <div class="glass-panel card crawler-detail-card">
+                        <div class="crawler-header-action">
+                            <h3 class="card-title">
+                                <i data-lucide="bot" class="neon-glow-icon cyan"></i>
+                                <span data-i18n="title_ai_crawler_status">AI 크롤러 권한 & robots.txt 차단 상태 정밀 검사</span>
+                            </h3>
+                            <div class="crawler-stats-pills">
+                                <span class="c-pill c-pill-green"><span id="cnt-crawler-allowed">0</span> <span data-i18n="c_allowed">허용됨</span></span>
+                                <span class="c-pill c-pill-yellow"><span id="cnt-crawler-partial">0</span> <span data-i18n="c_partial">부분 차단</span></span>
+                                <span class="c-pill c-pill-red"><span id="cnt-crawler-blocked">0</span> <span data-i18n="c_blocked">차단됨</span></span>
+                            </div>
+                        </div>
+                        <p class="card-desc" data-i18n="desc_ai_crawler_status">ChatGPT(GPTBot), Claude(ClaudeBot), PerplexityBot 등 주요 AI 검색 엔진 크롤러들의 페이지 접근 여부를 robots.txt 룰, 메타 로봇 지침, X-Robots-Tag 헤더를 종합 검토하여 산출합니다.</p>
+                        
+                        <div class="crawler-grid" id="crawlers-status-grid">
+                            <!-- Injected Dynamically -->
+                            <div class="empty-state-notice" data-i18n="txt_empty_analyze_first">페이지를 분석하면 크롤러 진단 내역이 로드됩니다.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. SCHEMA CHECKER & GENERATOR VIEW -->
+                <div id="view-schema" class="tab-pane">
+                    <div class="schema-layout-container">
+                        <!-- Left Panel: Detected Schemas & Generator selection -->
+                        <div class="glass-panel card schema-selector-card border-neon-cyan">
+                            <h3 class="card-title" data-i18n="title_detected_markup">1단계: 기존 스키마 감지 및 검증</h3>
+                            <div class="schema-detector-result-box" id="detected-schema-results">
+                                <div class="empty-state-notice" data-i18n="txt_empty_analyze_first">페이지를 분석하면 스키마가 로드됩니다.</div>
+                            </div>
+
+                            <hr class="neon-divider">
+
+                            <h3 class="card-title" data-i18n="title_create_schema">2단계: 원클릭 스키마 마크업 생성기</h3>
+                            <p class="card-desc" data-i18n="desc_create_schema">AI 답변 엔진에 페이지의 엔티티 구조를 선언해주는 JSON-LD 코드를 마우스 몇 번 클릭으로 만들어 냅니다.</p>
+                            
+                            <div class="form-group">
+                                <label for="schema-type-select" data-i18n="lbl_select_schema_type">만들고자 하는 스키마 유형 선택</label>
+                                <select id="schema-type-select" class="select-dark select-block">
+                                    <option value="FAQPage" selected>FAQ (자주 묻는 질문)</option>
+                                    <option value="Article">Article (뉴스/블로그 기사)</option>
+                                    <option value="Product">Product (상품 정보)</option>
+                                    <option value="HowTo">HowTo (가이드/노하우 방법)</option>
+                                    <option value="LocalBusiness">LocalBusiness (지역 비즈니스)</option>
+                                    <option value="Organization">Organization (기업/단체 정보)</option>
+                                    <option value="Person">Person (개인 프로필)</option>
+                                    <option value="Event">Event (이벤트/행사)</option>
+                                    <option value="Recipe">Recipe (레시피/조리법)</option>
+                                    <option value="VideoObject">VideoObject (비디오 정보)</option>
+                                    <option value="BreadcrumbList">BreadcrumbList (탐색 경로)</option>
+                                    <option value="Course">Course (강좌 정보)</option>
+                                    <option value="JobPosting">JobPosting (채용 공고)</option>
+                                    <option value="Review">Review (사용자 리뷰)</option>
+                                    <option value="WebPage">WebPage (웹페이지 상세)</option>
+                                </select>
+                            </div>
+
+                            <div id="schema-generator-fields" class="schema-dynamic-fields">
+                                <!-- Dynamically generated fields for the selected schema -->
+                            </div>
+                            
+                            <div class="schema-action-buttons">
+                                <button id="btn-autofill-schema" class="btn btn-outline-cyan btn-block">
+                                    <i data-lucide="wand-2"></i>
+                                    <span data-i18n="btn_autofill_schema">현재 분석된 정보로 필드 자동 채우기</span>
+                                </button>
+                                <button id="btn-generate-schema-code" class="btn btn-cyan btn-block">
+                                    <i data-lucide="sparkles"></i>
+                                    <span data-i18n="btn_generate_schema">JSON-LD 코드 생성</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Right Panel: Output and Implementation copy -->
+                        <div class="glass-panel card schema-output-card border-neon-purple">
+                            <h3 class="card-title" data-i18n="title_schema_code_output">생성된 JSON-LD 마크업 결과</h3>
+                            <p class="card-desc" data-i18n="desc_schema_code_output">생성된 코드를 복사하여 웹사이트의 <code>&lt;head&gt;</code> 혹은 <code>&lt;body&gt;</code> 섹션에 삽입하세요.</p>
+                            
+                            <div class="code-output-container">
+                                <div class="code-header">
+                                    <span class="code-lang-label">JSON-LD (application/ld+json)</span>
+                                    <button id="btn-copy-schema" class="btn btn-mini btn-outline-purple">
+                                        <i data-lucide="copy"></i>
+                                        <span data-i18n="btn_copy">복사</span>
+                                    </button>
+                                </div>
+                                <pre class="code-preview" id="schema-code-block">// 생성된 스키마 코드가 여기에 표시됩니다.</pre>
+                            </div>
+
+                            <div class="schema-validator-results" id="schema-validator-output" style="display: none;">
+                                <div class="validator-header">
+                                    <i data-lucide="check-circle" class="text-neon-green"></i>
+                                    <span>구조 검증 결과: <strong>오류 없음 (Valid)</strong></span>
+                                </div>
+                            </div>
+
+                            <div class="schema-guide-box">
+                                <h4 class="section-subtitle" data-i18n="subtitle_how_to_install">웹사이트 적용 가이드</h4>
+                                <ol class="guide-list">
+                                    <li data-i18n="schema_install_step1">위의 <strong>'복사'</strong> 버튼을 클릭하여 생성된 스크립트를 클립보드에 담습니다.</li>
+                                    <li data-i18n="schema_install_step2">사이트의 HTML 소스 코드 내 <code>&lt;/head&gt;</code> 태그 바로 직전에 붙여넣습니다.</li>
+                                    <li data-i18n="schema_install_step3">티스토리/워드프레스 등에서는 HTML 편집 모드 또는 전용 플러그인(Header and Footer)을 이용하면 간편합니다.</li>
+                                    <li data-i18n="schema_install_step4">구글의 '서치 콘솔'이나 '리치 결과 테스트' 도구에 사이트를 제출해 정상 수집 여부를 체크하세요.</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 7. AI ASSISTANT VIEW -->
+                <div id="view-assistant" class="tab-pane">
+                    <div class="assistant-layout-container">
+                        <!-- Left Panel: Chat Interface -->
+                        <div class="glass-panel card chat-card border-neon-cyan">
+                            <h3 class="card-title">
+                                <i data-lucide="bot" class="neon-glow-icon cyan"></i>
+                                <span data-i18n="title_ai_advisor">Geo Lens Midam AI 어시스턴트</span>
+                            </h3>
+                            
+                            <div class="chat-messages-container" id="chat-messages">
+                                <div class="message message-bot">
+                                    <div class="avatar"><i data-lucide="bot"></i></div>
+                                    <div class="message-content">
+                                        <p data-i18n="chat_welcome">안녕하세요! Geo Lens Midam AI 최적화 비서입니다. 분석된 웹페이지의 답변 엔진 최적화(AEO) 및 검색 엔진 최적화(GEO) 점수를 기반으로 무엇을 도와드릴까요?</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="chat-input-area">
+                                <input type="text" id="chat-user-input" placeholder="최적화에 대해 질문하거나 아래 템플릿을 클릭하세요...">
+                                <button id="btn-send-chat" class="btn btn-cyan btn-glow">
+                                    <i data-lucide="send"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Right Panel: Scenarios and presets -->
+                        <div class="glass-panel card presets-card border-neon-purple">
+                            <h3 class="card-title" data-i18n="title_quick_queries">빠른 질문 템플릿</h3>
+                            <p class="card-desc" data-i18n="desc_quick_queries">자주 묻는 최적화 질문을 클릭하면 어시스턴트가 분석 보고서 기반의 맞춤 솔루션을 답변합니다.</p>
+                            
+                            <div class="quick-templates-grid">
+                                <button class="btn btn-outline-purple btn-preset" data-query="현재 페이지의 핵심 AEO 점수 요약과 우선순위 조언을 해줘.">
+                                    <i data-lucide="help-circle"></i>
+                                    <span data-i18n="q_aeo_summary">AEO 점수 및 요약 조언</span>
+                                </button>
+                                <button class="btn btn-outline-purple btn-preset" data-query="저자 권위성(E-E-A-T)을 AI에 효과적으로 증명하려면 이 페이지에서 무엇을 보강해야 해?">
+                                    <i data-lucide="user-check"></i>
+                                    <span data-i18n="q_eeat_improve">E-E-A-T 신호 보강하기</span>
+                                </button>
+                                <button class="btn btn-outline-purple btn-preset" data-query="현재 페이지에 적합한 구조화 데이터(Schema Markup)를 추천하고 예시를 만들어줘.">
+                                    <i data-lucide="sparkle"></i>
+                                    <span data-i18n="q_schema_recommend">스키마 마크업 추천/생성</span>
+                                </button>
+                                <button class="btn btn-outline-purple btn-preset" data-query="차단된 AI 봇 크롤러들의 차단 해제 방법(robots.txt 양식 등)을 알려줘.">
+                                    <i data-lucide="lock"></i>
+                                    <span data-i18n="q_unblock_bot">AI 봇 차단 해제 robots.txt</span>
+                                </button>
+                                <button class="btn btn-outline-purple btn-preset" data-query="AI 검색 엔진(ChatGPT, Perplexity 등)에서 인용을 잘 당하기 위한 본문 서술 팁은?">
+                                    <i data-lucide="file-text"></i>
+                                    <span data-i18n="q_citation_tips">AEO 본문 작성 글쓰기 팁</span>
+                                </button>
+                            </div>
+
+                            <hr class="neon-divider">
+
+                            <h4 class="section-subtitle" data-i18n="subtitle_ai_settings">AI 어시스턴트 설정</h4>
+                            <div class="settings-box bg-dark">
+                                <div class="form-group">
+                                    <label for="ai-mode-select" data-i18n="lbl_ai_mode">구동 모드</label>
+                                    <select id="ai-mode-select" class="select-dark select-block">
+                                        <option value="local" selected>로컬 룰 기반 스마트 에이전트 (무료/오프라인)</option>
+                                        <option value="gemini">Gemini API 연동 (사용자 API Key 사용)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" id="gemini-key-wrapper" style="display: none;">
+                                    <label for="gemini-api-key" data-i18n="lbl_gemini_key">Gemini API Key</label>
+                                    <input type="password" id="gemini-api-key" class="input-dark input-block" placeholder="AI-zaSy... 입력하세요">
+                                    <div class="form-help-text" data-i18n="help_gemini_key">입력하신 API Key는 로컬 브라우저 저장소(localStorage)에만 안전하게 보관되며 외부 서버로 전송되지 않습니다.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 8. SETTINGS VIEW -->
+                <div id="view-settings" class="tab-pane">
+                    <div class="glass-panel card border-neon-cyan max-width-600">
+                        <h3 class="card-title" data-i18n="title_general_settings">일반 설정 & 분석 프록시</h3>
+                        <p class="card-desc" data-i18n="desc_general_settings">애플리케이션의 크롤링 및 다국어 관련 매개변수를 조정합니다.</p>
+                        
+                        <div class="form-group">
+                            <label for="settings-proxy-url" data-i18n="lbl_cors_proxy">CORS 우회 프록시 서버 주소</label>
+                            <input type="text" id="settings-proxy-url" class="input-dark input-block" value="https://corsproxy.io/?">
+                            <div class="form-help-text" data-i18n="help_cors_proxy">웹페이지 주소(URL)로 직접 분석할 때 CORS 제한을 푸는 프록시 주소입니다. 브라우저 차단 시 프록시를 켜시거나 HTML 직접 입력을 권장합니다.</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="settings-demo-mode" data-i18n="lbl_demo_mode">CORS 차단 시 데모 데이터 로드</label>
+                            <label class="switch-container">
+                                <input type="checkbox" id="settings-demo-mode" checked>
+                                <span class="slider"></span>
+                                <span class="switch-label" data-i18n="lbl_demo_mode_active">Fetch 실패 시 현실적인 데모 모드 리포트 자동 생성</span>
+                            </label>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="settings-lang" data-i18n="lbl_default_lang">기본 구동 언어</label>
+                            <select id="settings-lang" class="select-dark select-block">
+                                <option value="ko" selected>한국어 (Korean)</option>
+                                <option value="en">English (English)</option>
+                                <option value="ja">日本語 (Japanese)</option>
+                                <option value="zh">简体中文 (Chinese)</option>
+                                <option value="fr">Français (French)</option>
+                                <option value="de">Deutsch (German)</option>
+                                <option value="es">Español (Spanish)</option>
+                                <option value="pt">Português (Portuguese)</option>
+                                <option value="it">Italiano (Italian)</option>
+                                <option value="ru">Русский (Russian)</option>
+                                <option value="vi">Tiếng Việt (Vietnamese)</option>
+                                <option value="id">Bahasa Indonesia (Indonesian)</option>
+                            </select>
+                        </div>
+
+                        <hr class="neon-divider">
+                        
+                        <button id="btn-save-settings" class="btn btn-cyan btn-glow">
+                            <i data-lucide="save"></i>
+                            <span data-i18n="btn_save_settings">설정 저장</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 9. PRINT ONLY CLOSING SUMMARY PAGE -->
+                <div id="view-print-summary" class="tab-pane print-only-pane">
+                    <div class="glass-panel card closing-pitch-card border-neon-purple">
+                        <h2 class="closing-title" style="font-size: 20px; font-weight: 700; margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="award" class="text-neon-purple"></i>
+                            <span>종합 진단 평정 및 비즈니스 제언</span>
+                        </h2>
+                        
+                        <!-- Score Visualization Diagram -->
+                        <div class="closing-diagram-box" style="display: flex; align-items: center; gap: 40px; margin-bottom: 25px;">
+                            <div class="closing-score-radial" style="position: relative; width: 120px; height: 120px;">
+                                <svg viewBox="0 0 100 100" class="radial-svg" style="width: 100%; height: 100%; transform: rotate(-90deg);">
+                                    <circle cx="50" cy="50" r="40" class="bg-circle" style="fill: transparent; stroke-width: 8px; stroke: rgba(255, 255, 255, 0.05);" />
+                                    <circle cx="50" cy="50" r="40" class="progress-circle stroke-neon-purple" id="print-closing-score-circle" stroke-dasharray="251.2" stroke-dashoffset="251.2" style="fill: transparent; stroke-width: 8px; stroke-linecap: round;" />
+                                </svg>
+                                <div class="score-text-center" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; display: flex; flex-direction: column;">
+                                    <span class="score-number" id="print-closing-score-value" style="font-size: 28px; font-weight: 900; font-family: 'Orbitron';">0</span>
+                                    <span class="score-label" style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted);">GEO</span>
+                                </div>
+                            </div>
+                            <div class="closing-score-status-box">
+                                <div class="closing-status-title" id="print-closing-status-title" style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">진단 등급: 분석 대기 중</div>
+                                <p class="closing-status-desc" style="font-size: 13px; color: var(--text-secondary);">인공지능 검색 엔진(Generative Engines) 환경 하의 웹페이지 인용 신뢰 강도</p>
+                            </div>
+                        </div>
+
+                        <hr class="neon-divider">
+
+                        <!-- FOMO Marketing Pitch Message -->
+                        <div class="fomo-message-container" style="margin: 25px 0;">
+                            <h3 class="fomo-heading" style="font-size: 16px; font-weight: 700; color: var(--neon-red); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                                <i data-lucide="alert-triangle"></i>
+                                <span>귀사의 웹사이트는 제로클릭(Zero-Click) AI 검색 시대에 안전합니까?</span>
+                            </h3>
+                            <p class="fomo-text" style="font-size: 13px; line-height: 1.6; color: var(--text-primary); margin-bottom: 12px;">
+                                현재 분석 결과, 귀하의 웹페이지는 인공지능이 정보를 구조적으로 발췌하고 신뢰 신호(E-E-A-T)를 해석하는 기준에 부분 결함 또는 중대한 미흡 요건을 보이고 있어 <strong>정보 인용 비율이 매우 취약한 수준</strong>입니다. 
+                                이 상태가 지속되면, 사용자가 구글이나 네이버의 웹링크를 클릭하여 유입되지 않고 AI의 직접 답변만 보고 이탈하는 <strong>'제로클릭(Zero-Click) 시대'</strong>에 귀사 웹페이지는 완전 배제되어 미래 검색 생태계에서 생존할 수 없게 됩니다.
+                            </p>
+                            <p class="fomo-text" style="font-size: 13px; line-height: 1.6; color: var(--text-primary); margin-bottom: 12px;">
+                                검색 엔진 점유율이 생성형 AI 인프라로 재편되는 이 시점에 최적화되지 않은 웹사이트는 <strong>트래픽의 급감과 온라인 마케팅 매출의 지속 하락</strong>을 야기할 수밖에 없습니다. AI 크롤러 봇의 권한을 완전 허용하고, 스키마 마크업을 심어 논리 관계를 정교화하는 AI 준비도 세팅은 선택이 아닌 필수 요건입니다.
+                            </p>
+                        </div>
+
+                        <div class="closing-proposal-box" style="margin-top: 30px; padding: 20px; border-radius: 8px; background: rgba(243, 85, 218, 0.04); border: 1px dashed rgba(243, 85, 218, 0.2);">
+                            <div class="proposal-logo" style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-family: 'Orbitron'; font-size: 18px; font-weight: 700;">
+                                <i data-lucide="shield-check" class="text-neon-cyan"></i>
+                                <span>Geo Lens <span class="neon-text-magenta">Midam</span> × <strong style="color: var(--neon-purple);">미담공장 AX</strong></span>
+                            </div>
+                            <p class="proposal-lead" style="font-size: 13px; line-height: 1.6; color: var(--text-primary); margin-bottom: 15px;">
+                                생성형 AI 엔진 최적화(GEO/AEO)라는 미지의 영역에서 비즈니스 경쟁력을 확보하고 매출의 미래를 지키는 여정, <strong>미담공장 AX</strong>가 독보적인 기술 장벽과 정밀 진단 스택으로 귀사의 비즈니스 성장을 견인하겠습니다.
+                            </p>
+                            <div class="proposal-contact" style="font-size: 12px; font-weight: 600; color: var(--neon-cyan);">GEO / AEO 최적화 및 파트너십 문의: pbat01@gmail.com</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- paste html modal -->
+    <div class="modal-overlay" id="modal-paste-html-overlay" style="display: none;">
+        <div class="modal-box glass-panel border-neon-purple">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i data-lucide="file-code" class="text-neon-purple"></i>
+                    <span data-i18n="modal_title_paste">HTML 소스 직접 입력하여 분석하기</span>
+                </h3>
+                <button class="btn-close-modal" id="btn-close-paste-modal"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc" data-i18n="modal_desc_paste">CORS 제한 등으로 URL 분석이 불가능하거나, 로컬 기획 중인 페이지의 HTML을 직접 분석하고 싶을 때 아래에 소스코드를 붙여넣으세요.</p>
+                <div class="form-group">
+                    <label for="paste-virtual-url" data-i18n="lbl_virtual_url">가상 URL (선택 사항)</label>
+                    <input type="text" id="paste-virtual-url" class="input-dark input-block" value="https://mysite.com/page-to-test">
+                </div>
+                <div class="form-group">
+                    <label for="paste-html-area" data-i18n="lbl_html_source">HTML 소스 코드</label>
+                    <textarea id="paste-html-area" class="textarea-dark input-block" rows="12" placeholder="<!DOCTYPE html> ... 붙여넣으세요."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-cancel-paste" class="btn btn-outline-purple" data-i18n="btn_cancel">취소</button>
+                <button id="btn-run-paste-analysis" class="btn btn-purple btn-glow">
+                    <i data-lucide="play"></i>
+                    <span data-i18n="btn_run_analysis">소스 분석 시작</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Core App Logic modules loading -->
+    <script src="crawlers.js"></script>
+    <script src="analyzer.js"></script>
+    <script src="schema.js"></script>
+    <script src="assistant.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

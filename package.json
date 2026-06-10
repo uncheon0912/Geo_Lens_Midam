@@ -1,0 +1,19 @@
+{
+  "name": "geo-lens-midam",
+  "version": "1.0.0",
+  "description": "AI & AEO Web Audit Dashboard",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx -y lite-server",
+    "dev": "npx -y lite-server"
+  },
+  "keywords": [
+    "aeo",
+    "geo",
+    "seo",
+    "dashboard",
+    "auditor"
+  ],
+  "author": "Geo Lens Midam Team",
+  "license": "MIT"
+}
