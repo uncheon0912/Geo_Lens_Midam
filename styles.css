@@ -1786,9 +1786,22 @@ h1, h2, h3, h4, h5, h6 {
 
 .tracker-layout {
     display: grid;
-    grid-template-columns: 350px 1fr;
+    grid-template-columns: 340px 380px 1fr; /* 3열 구조: 1열(설정) 2열(질문목록) 3열(결과) */
     gap: 20px;
     align-items: start;
+}
+
+.tracker-questions-panel {
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    height: calc(100vh - 140px);
+    position: sticky;
+    top: 20px;
+    background: rgba(10, 15, 30, 0.4);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 242, 254, 0.1);
 }
 
 .tracker-sidebar-panel {
@@ -2088,6 +2101,15 @@ h1, h2, h3, h4, h5, h6 {
     }
     .dashboard-detailed-grid {
         grid-template-columns: 1fr;
+    }
+    
+    /* 추적기 3열 레이아웃 반응형 해제 */
+    .tracker-layout {
+        grid-template-columns: 1fr;
+    }
+    .tracker-sidebar-panel, .tracker-questions-panel {
+        height: auto !important;
+        position: static !important;
     }
 }
 
@@ -2603,6 +2625,7 @@ body.is-printing .print-only-pane {
     body.print-tracker-only .keyword-add-form,
     body.print-tracker-only .tracker-backup-actions,
     body.print-tracker-only .tracker-scheduler-box,
+    body.print-tracker-only .tracker-questions-panel,
     body.print-tracker-only #btn-run-audit-left,
     body.print-tracker-only #btn-run-audit,
     body.print-tracker-only .question-item-actions {

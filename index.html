@@ -673,7 +673,10 @@
                             <!-- 분석 타겟 브랜드명 설정 구역 -->
                             <div class="form-group">
                                 <label for="target-brand-input" data-i18n="lbl_target_brand">분석 타겟 병원/브랜드명</label>
-                                <input type="text" id="target-brand-input" class="input-dark input-block" value="미담한의원" placeholder="예: 미담한의원">
+                                <div class="input-with-btn">
+                                    <input type="text" id="target-brand-input" class="input-dark" value="미담한의원" placeholder="예: 미담한의원" style="flex: 1;">
+                                    <button type="button" id="btn-save-target-brand" class="btn btn-cyan btn-glow" style="padding: 8px 14px; font-size: 12px; white-space: nowrap;">등록</button>
+                                </div>
                             </div>
 
                             <!-- API Key Settings Section (Tucked cleanly inside) -->
@@ -719,18 +722,7 @@
 
                             <hr class="neon-divider">
 
-                            <!-- Question List -->
-                            <div class="question-list-container">
-                                <h4 class="section-subtitle" data-i18n="title_question_list">등록된 질문 목록</h4>
-                                <div id="tracker-question-list" class="question-list">
-                                    <!-- Dynamic items will load here -->
-                                </div>
-                                <button id="btn-run-audit-left" class="btn btn-cyan btn-block btn-glow" style="margin-top: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <i data-lucide="play"></i> <span data-i18n="btn_run_audit_big">실시간 AEO 추적 분석 시작</span>
-                                </button>
-                            </div>
-
-                            <hr class="neon-divider">
+                            <!-- Backup and Restore Actions -->
 
                             <!-- Backup and Restore Actions -->
                             <div class="tracker-backup-actions">
@@ -768,6 +760,22 @@
                                         <span class="switch-label">매일 자동 메일 리포트 발송 활성화</span>
                                     </label>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Center Panel: Question List Sidebar -->
+                        <div class="tracker-questions-panel glass-panel border-neon-cyan">
+                            <div class="question-list-container" style="display: flex; flex-direction: column; height: 100%;">
+                                <h4 class="section-subtitle" style="display: flex; align-items: center; gap: 6px; font-size: 14px; margin-bottom: 12px;">
+                                    <i data-lucide="list-todo" class="text-neon-cyan" style="width: 16px; height: 16px;"></i>
+                                    <span data-i18n="title_question_list">등록된 질문 목록</span>
+                                </h4>
+                                <div id="tracker-question-list" class="question-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-top: 8px; margin-bottom: 12px; max-height: none;">
+                                    <!-- Dynamic items will load here -->
+                                </div>
+                                <button id="btn-run-audit-left" class="btn btn-cyan btn-block btn-glow" style="font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; font-size: 14px;">
+                                    <i data-lucide="play"></i> <span data-i18n="btn_run_audit_big">실시간 AEO 추적 분석 시작</span>
+                                </button>
                             </div>
                         </div>
 

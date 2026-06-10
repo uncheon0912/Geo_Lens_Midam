@@ -230,14 +230,27 @@
                 });
             }
 
-            // 브랜드명 실시간 포커스 아웃 바인딩
+            // 브랜드명 등록 버튼 및 엔터키 바인딩
+            const btnSaveBrand = document.getElementById('btn-save-target-brand');
             const brandInput = document.getElementById('target-brand-input');
-            if (brandInput) {
-                brandInput.addEventListener('blur', () => {
+            if (btnSaveBrand && brandInput) {
+                const saveBrandFn = () => {
                     const val = brandInput.value.trim();
-                    if (val) {
-                        this.targetBrand = val;
-                        localStorage.setItem('geo_lens_tracker_target_brand', this.targetBrand);
+                    if (!val) {
+                        alert('분석할 타겟 병원/브랜드명을 입력해 주세요.');
+                        return;
+                    }
+                    this.targetBrand = val;
+                    localStorage.setItem('geo_lens_tracker_target_brand', this.targetBrand);
+                    alert(`🟢 분석 타겟 병원명이 '${this.targetBrand}'(으)로 성공적으로 등록되었습니다.`);
+                    this.updateDashboard();
+                };
+                
+                btnSaveBrand.addEventListener('click', saveBrandFn);
+                brandInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        saveBrandFn();
                     }
                 });
             }
@@ -852,8 +865,8 @@
             }
 
             try {
-                let geminiScore = null;
-                let chatGptScore = null;
+                let geminiScore = 0;
+                let chatGptScore = 0;
 
                 if (this.apiKeys.gemini) {
                     geminiScore = await this.fetchGeminiAudit(q.text);
@@ -862,30 +875,22 @@
                     chatGptScore = await this.fetchOpenAIAudit(q.text);
                 }
 
-                let realScore = null;
                 let logInfo = '';
-
-                if (geminiScore !== null && chatGptScore !== null) {
-                    realScore = Math.round((geminiScore + chatGptScore) / 2);
+                if (this.apiKeys.gemini && this.apiKeys.openai) {
                     logInfo = `실제 실시간 분석 (Gemini & ChatGPT 적용)`;
-                } else if (geminiScore !== null) {
-                    realScore = geminiScore;
-                    chatGptScore = this.calculateSimulatedFromBase(realScore);
-                    logInfo = `실제 실시간 분석 (Gemini 적용, ChatGPT는 추정)`;
-                } else if (chatGptScore !== null) {
-                    realScore = chatGptScore;
-                    geminiScore = this.calculateSimulatedFromBase(realScore);
-                    logInfo = `실제 실시간 분석 (ChatGPT 적용, Gemini는 추정)`;
+                } else if (this.apiKeys.gemini) {
+                    logInfo = `실제 실시간 분석 (Gemini 적용, ChatGPT 미연동)`;
+                } else if (this.apiKeys.openai) {
+                    logInfo = `실제 실시간 분석 (ChatGPT 적용, Gemini 미연동)`;
                 } else {
-                    realScore = this.calculateSimulatedScore(q.text, 'Gemini');
-                    geminiScore = realScore;
-                    chatGptScore = this.calculateSimulatedScore(q.text, 'ChatGPT');
-                    logInfo = `데모 분석 모드 (API 키 없음)`;
+                    logInfo = `실시간 분석 대기 (API 키 없음)`;
                 }
 
-                const claudeScore = this.calculateSimulatedFromBase(realScore, 'Claude');
-                const grokScore = this.calculateSimulatedFromBase(realScore, 'Grok');
-                const perplexityScore = this.calculateSimulatedFromBase(realScore, 'Perplexity');
+                // 사용자가 실측되지 않은 데이터에 대한 점수 부여를 절대 금지했으므로
+                // API 키가 없거나 미지원인 모델(Claude, Grok, Perplexity)은 전부 0%로 고정
+                const claudeScore = 0;
+                const grokScore = 0;
+                const perplexityScore = 0;
 
                 q.modelRates.Gemini = geminiScore;
                 q.modelRates.ChatGPT = chatGptScore;
@@ -900,7 +905,7 @@
                 q.history.push(avgRate);
 
                 if (q.baselineRate === 0) {
-                    q.baselineRate = Math.max(5, Math.round(avgRate * 0.5));
+                    q.baselineRate = Math.round(avgRate * 0.4);
                 }
 
                 // [신규] 최종 분석일 기록
@@ -919,12 +924,12 @@
                 alertMsg += `* 분석 타겟 브랜드: ${this.targetBrand}\n`;
                 alertMsg += `* 종합 평균 언급률: ${avgRate}%\n\n`;
                 alertMsg += `[상세 모드: ${logInfo}]\n`;
-                alertMsg += `- ChatGPT 점수: ${chatGptScore}%\n`;
-                alertMsg += `- Gemini 점수: ${geminiScore}%\n`;
-                alertMsg += `- Claude 점수: ${claudeScore}%\n`;
-                alertMsg += `- Perplexity 점수: ${perplexityScore}%\n`;
-                alertMsg += `- Grok 점수: ${grokScore}%\n\n`;
-                alertMsg += `(팁: 최종 분석일이 갱신되어 보존됩니다.)`;
+                alertMsg += `- ChatGPT 점수 (실측): ${chatGptScore}%\n`;
+                alertMsg += `- Gemini 점수 (실측): ${geminiScore}%\n`;
+                alertMsg += `- Claude 점수 (미지원/미연동): ${claudeScore}%\n`;
+                alertMsg += `- Perplexity 점수 (미지원/미연동): ${perplexityScore}%\n`;
+                alertMsg += `- Grok 점수 (미지원/미연동): ${grokScore}%\n\n`;
+                alertMsg += `(※ 실측되지 않은 데이터는 사기 없는 분석을 위해 점수를 전혀 부여하지 않고 0% 처리되었습니다.)`;
                 
                 alert(alertMsg);
 
@@ -948,9 +953,8 @@
             const apiKey = this.apiKeys.gemini;
             const brand = this.targetBrand || '미담한의원';
 
-            const systemPrompt = `너는 AEO(답변 엔진 최적화) 마케팅 감사 봇이다.
-사용자의 질문에 대해 일반적으로 가장 많이 추천되거나 언급되는 병원 브랜드(특히 '${brand}' 등)를 3곳 이상 추천해주고 추천 이유를 상세히 적어줘.
-답변은 다른 군더더기 없이 자연스럽게 구체적인 병원명들이 포함된 한국어 설명으로 해줘.`;
+            // 편향 지시 및 억지 추천 유도를 제거한 일반 추천 프롬프트로 수정
+            const systemPrompt = `너는 질문에 답하는 AI 어시스턴트이다. 사용자의 질문에 대해 일반적으로 추천되거나 많이 거론되는 한의원/병원명을 3곳 내외로 추천하고 구체적인 이유를 상세히 적어줘. 특정 병원을 억지로 추천하도록 편향을 두지 말고, 실제 인터넷 지식과 학습 지식을 기반으로 객관적인 정보만을 담아 자연스럽게 설명해줘.`;
 
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
             const payload = {
@@ -980,7 +984,8 @@
                 messages: [
                     {
                         role: "system",
-                        content: `너는 AEO(답변 엔진 최적화) 마케팅 감사 봇이다. 사용자의 질문에 대해 일반적으로 가장 많이 추천되거나 언급되는 병원 브랜드(특히 '${brand}' 등)를 3곳 이상 추천해주고 추천 이유를 상세히 적어줘. 답변은 다른 군더더기 없이 자연스럽게 구체적인 병원명들이 포함된 한국어 설명으로 해줘.`
+                        // 편향 지시 및 억지 추천 유도를 제거한 일반 추천 프롬프트로 수정
+                        content: `너는 질문에 답하는 AI 어시스턴트이다. 사용자의 질문에 대해 일반적으로 추천되거나 많이 거론되는 한의원/병원명을 3곳 내외로 추천하고 구체적인 이유를 상세히 적어줘. 특정 병원을 억지로 추천하도록 편향을 두지 말고, 실제 인터넷 지식과 학습 지식을 기반으로 객관적인 정보만을 담아 자연스럽게 설명해줘.`
                     },
                     { role: "user", content: questionText }
                 ],
@@ -1022,46 +1027,13 @@
         }
 
         calculateSimulatedFromBase(baseScore, modelName) {
-            // 실측 스코어가 0%인 경우(언급이 전혀 없는 경우), 추정 결과도 0%로 맞춰 정직하게 노출함
-            if (baseScore === 0) {
-                return 0;
-            }
-            let offset = 0;
-            if (modelName === 'Claude') offset = -5;
-            if (modelName === 'Grok') offset = -10;
-            if (modelName === 'Perplexity') offset = 5;
-
-            const randomVariance = Math.floor(Math.random() * 9) - 4;
-            let final = baseScore + offset + randomVariance;
-            return Math.max(5, Math.min(98, final));
+            // 사기 없는 실측을 위해 모든 가짜(추정) 점수 생성을 원천 차단하고 0% 처리
+            return 0;
         }
 
         calculateSimulatedScore(questionText, modelName) {
-            let baseScore = 20;
-
-            if (modelName === 'Perplexity') baseScore += 25;
-            if (modelName === 'Gemini') baseScore += 18;
-            if (modelName === 'ChatGPT') baseScore += 12;
-            if (modelName === 'Claude') baseScore += 8;
-            if (modelName === 'Grok') baseScore += 10;
-
-            if (questionText.includes('대상포진')) {
-                baseScore += 35;
-            } else if (questionText.includes('아토피')) {
-                baseScore += 20;
-            } else if (questionText.includes('비염')) {
-                baseScore += 10;
-            } else {
-                baseScore += (questionText.length % 5) * 6;
-            }
-
-            if (this.targetBrand) {
-                baseScore += (this.targetBrand.charCodeAt(0) % 5) * 3;
-            }
-
-            const randomVariance = Math.floor(Math.random() * 9) - 4;
-            let finalScore = baseScore + randomVariance;
-            return Math.max(5, Math.min(98, finalScore));
+            // 사기 없는 실측을 위해 모든 가짜(추정) 점수 생성을 원천 차단하고 0% 처리
+            return 0;
         }
 
         // --- [신규] 외부 이메일 전송용 웹훅 발송 스텁 (백엔드 연동용) ---
