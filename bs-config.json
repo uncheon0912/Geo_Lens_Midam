@@ -1,0 +1,8 @@
+{
+  "port": 2800,
+  "server": {
+    "baseDir": "./"
+  },
+  "files": ["./**/*.{html,htm,css,js}"],
+  "injectChanges": false
+}
