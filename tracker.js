@@ -1509,10 +1509,23 @@ ${context}
         }
 
         async fetchWebSearchSnippets(query) {
-            // DuckDuckGo 검색 결과 URL (한글 쿼리를 단 한 번만 안전하게 인코딩)
+            // 국내 포털(Daum, Naver) 및 DuckDuckGo 검색 경로 다중화
             const searchQueries = [
-                `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`,
-                `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`
+                {
+                    name: "Daum Search",
+                    url: `https://search.daum.net/search?w=tot&q=${encodeURIComponent(query)}`,
+                    selectors: ['.desc', '.f_eb', '.desc_txt', '.txt_line']
+                },
+                {
+                    name: "Naver Search",
+                    url: `https://search.naver.com/search.naver?query=${encodeURIComponent(query)}`,
+                    selectors: ['.api_txt_lines', '.dsc_txt', '.total_dsc']
+                },
+                {
+                    name: "DuckDuckGo Lite",
+                    url: `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`,
+                    selectors: ['.result-snippet', 'table tr']
+                }
             ];
 
             // 프록시별 맞춤 경로 조합 빌더 정의
@@ -1542,13 +1555,13 @@ ${context}
 
             let debugLog = [];
 
-            for (const searchUrl of searchQueries) {
+            for (const searchObj of searchQueries) {
                 for (const proxy of proxyBuilders) {
-                    const fullUrl = proxy.build(searchUrl);
-                    debugLog.push(`[시도] 프록시: ${proxy.name} | URL: ${fullUrl}`);
+                    const fullUrl = proxy.build(searchObj.url);
+                    debugLog.push(`[시도] 검색: ${searchObj.name} | 프록시: ${proxy.name} | URL: ${fullUrl}`);
                     try {
                         const controller = new AbortController();
-                        // 타임아웃을 15초(15000ms)로 넉넉하게 지정하여 allorigins가 차단/중단되지 않게 함
+                        // 15초 타임아웃 지정
                         const timeoutId = setTimeout(() => controller.abort(), 15000);
 
                         const response = await fetch(fullUrl, { signal: controller.signal });
@@ -1572,8 +1585,9 @@ ${context}
                             continue;
                         }
 
-                        // 봇 감지 챌린지 차단 확인
-                        if (htmlText.includes("ddg-captcha") || htmlText.includes("robot") || htmlText.includes("automated access") || htmlText.includes("Forbidden")) {
+                        // DuckDuckGo 등의 봇 차단 화면인지 검사
+                        if (searchObj.name.includes("DuckDuckGo") && 
+                            (htmlText.includes("ddg-captcha") || htmlText.includes("robot") || htmlText.includes("automated access") || htmlText.includes("Forbidden"))) {
                             debugLog.push(`-> 봇 감지 차단(Captcha/Forbidden) 발생`);
                             continue;
                         }
@@ -1583,39 +1597,35 @@ ${context}
                         
                         let snippets = [];
                         
-                        if (searchUrl.includes('html.duckduckgo.com')) {
-                            // html.duckduckgo.com 파싱
-                            const results = doc.querySelectorAll('.result__snippet');
-                            results.forEach((el, index) => {
-                                if (index < 10) snippets.push(el.textContent.trim());
-                            });
-                            
-                            if (snippets.length === 0) {
-                                const fallbacks = doc.querySelectorAll('.web-result');
-                                fallbacks.forEach((el, index) => {
-                                    if (index < 10) snippets.push(el.textContent.trim().replace(/\s+/g, ' '));
-                                });
-                            }
-                        } else {
-                            // lite.duckduckgo.com 파싱
-                            const tdSnippets = doc.querySelectorAll('.result-snippet');
-                            tdSnippets.forEach((el, index) => {
-                                if (index < 10) snippets.push(el.textContent.trim());
-                            });
-
-                            if (snippets.length === 0) {
-                                const rows = doc.querySelectorAll('table tr');
-                                rows.forEach((row, index) => {
-                                    const text = row.textContent.trim();
-                                    if (text && text.length > 30 && snippets.length < 10 && !text.includes('정렬') && !text.includes('검색 결과')) {
-                                        snippets.push(text.replace(/\s+/g, ' '));
+                        // 포털 전용 셀렉터 기준 요약 구문 파싱
+                        for (const selector of searchObj.selectors) {
+                            const elements = doc.querySelectorAll(selector);
+                            elements.forEach((el) => {
+                                const text = el.textContent.trim().replace(/\s+/g, ' ');
+                                if (text && text.length > 25 && snippets.length < 12) {
+                                    if (!snippets.includes(text)) {
+                                        snippets.push(text);
                                     }
-                                });
-                            }
+                                }
+                            });
+                            if (snippets.length >= 6) break;
+                        }
+
+                        // 폴백 파싱 (전체 p, span 기준 추출)
+                        if (snippets.length === 0 && !searchObj.name.includes("DuckDuckGo")) {
+                            const paragraphs = doc.querySelectorAll('p, span');
+                            paragraphs.forEach((el) => {
+                                const text = el.textContent.trim().replace(/\s+/g, ' ');
+                                if (text && text.length > 40 && text.length < 300 && snippets.length < 10) {
+                                    if (!snippets.includes(text)) {
+                                        snippets.push(text);
+                                    }
+                                }
+                            });
                         }
 
                         if (snippets.length > 0) {
-                            debugLog.push(`-> 성공! (${proxy.name} 프록시 이용, ${snippets.length}개 스니펫 획득)`);
+                            debugLog.push(`-> 성공! (${searchObj.name} 데이터를 ${proxy.name} 프록시를 통해 ${snippets.length}개 획득)`);
                             return snippets.join('\n\n');
                         } else {
                             debugLog.push(`-> 파싱 결과 0개 스니펫`);
@@ -1628,7 +1638,7 @@ ${context}
             }
 
             console.error("무료 웹 검색 결과 수집 전체 실패. 상세 로그:\n", debugLog.join('\n'));
-            return `[오류] 모든 CORS 프록시 및 DuckDuckGo 경로에서 검색 데이터를 수집하지 못했습니다.\n` +
+            return `[오류] 모든 CORS 프록시 및 검색 포털(Daum, Naver, DuckDuckGo)에서 검색 데이터를 수집하지 못했습니다.\n` +
                    `네트워크 상태를 확인하시거나, 잠시 후 다시 실행해 주십시오.\n\n` +
                    `※ 상세 시도 로그:\n` + debugLog.join('\n');
         }
