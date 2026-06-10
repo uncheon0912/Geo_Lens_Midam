@@ -1061,26 +1061,33 @@
             }
 
             try {
+                // 1. Perplexity 실시간 웹 검색 원본 텍스트 수집 (RAG 컨텍스트 획득)
+                let perplexityContext = '';
+                if (this.apiKeys.perplexity) {
+                    perplexityContext = await this.fetchPerplexityAuditRawText(q.text);
+                }
+
                 let geminiScore = 0;
                 let chatGptScore = 0;
                 let perplexityScore = 0;
                 let claudeScore = 0;
                 let grokScore = 0;
 
+                if (this.apiKeys.perplexity) {
+                    perplexityScore = this.evaluateTextMentionScore(perplexityContext, this.targetBrand);
+                }
                 if (this.apiKeys.gemini) {
+                    // Gemini는 자체 구글 실시간 검색 Grounding이 동작함
                     geminiScore = await this.fetchGeminiAudit(q.text);
                 }
                 if (this.apiKeys.openai) {
-                    chatGptScore = await this.fetchOpenAIAudit(q.text);
-                }
-                if (this.apiKeys.perplexity) {
-                    perplexityScore = await this.fetchPerplexityAudit(q.text);
+                    chatGptScore = await this.fetchOpenAIAudit(q.text, perplexityContext);
                 }
                 if (this.apiKeys.claude) {
-                    claudeScore = await this.fetchClaudeAudit(q.text);
+                    claudeScore = await this.fetchClaudeAudit(q.text, perplexityContext);
                 }
                 if (this.apiKeys.grok) {
-                    grokScore = await this.fetchGrokAudit(q.text);
+                    grokScore = await this.fetchGrokAudit(q.text, perplexityContext);
                 }
 
                 let logInfo = '';
@@ -1159,11 +1166,12 @@
             const brand = this.targetBrand || '미담한의원';
 
             // 편향 지시 및 억지 추천 유도를 제거한 일반 추천 프롬프트로 수정
-            const systemPrompt = `너는 질문에 답하는 AI 어시스턴트이다. 사용자의 질문에 대해 일반적으로 추천되거나 많이 거론되는 한의원/병원명을 3곳 내외로 추천하고 구체적인 이유를 상세히 적어줘. 특정 병원을 억지로 추천하도록 편향을 두지 말고, 실제 인터넷 지식과 학습 지식을 기반으로 객관적인 정보만을 담아 자연스럽게 설명해줘.`;
+            const systemPrompt = `너는 질문에 답하는 AI 어시스턴트이다. 사용자의 질문에 대해 일반적으로 추천되거나 많이 거론되는 한의원/병원명을 3곳 내외로 추천하고 구체적인 이유를 상세히 적어줘. 특정 병원을 억지로 추천하도록 편향을 두지 말고, 실제 인터넷 지식과 구글 검색 실시간 지식을 기반으로 객관적인 정보만을 담아 자연스럽게 설명해줘.`;
 
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
             const payload = {
-                contents: [{ parts: [{ text: `${systemPrompt}\n\n질문: ${questionText}` }] }]
+                contents: [{ parts: [{ text: `${systemPrompt}\n\n질문: ${questionText}` }] }],
+                tools: [{ googleSearchRetrieval: {} }] // 구글 실시간 검색 Grounding 기능 활성화!
             };
 
             const response = await fetch(url, {
@@ -1179,19 +1187,25 @@
             return this.evaluateTextMentionScore(textResponse, brand);
         }
 
-        async fetchOpenAIAudit(questionText) {
+        async fetchOpenAIAudit(questionText, context = '') {
             const apiKey = this.apiKeys.openai;
             const brand = this.targetBrand || '미담한의원';
+
+            let systemPrompt = `너는 질문에 답하는 AI 어시스턴트이다. 사용자의 질문에 대해 일반적으로 추천되거나 많이 거론되는 한의원/병원명을 3곳 내외로 추천하고 구체적인 이유를 상세히 적어줘. 특정 병원을 억지로 추천하도록 편향을 두지 말고, 실제 인터넷 지식과 학습 지식을 기반으로 객관적인 정보만을 담아 자연스럽게 설명해줘.`;
+
+            if (context) {
+                systemPrompt = `너는 질문에 답하는 AI 어시스턴트이다. 제공되는 [실시간 인터넷 검색 결과]를 최신 정보 컨텍스트로 삼아, 사용자의 질문에 대해 신뢰성 높은 최신 병원/브랜드명 3곳 내외를 추천하고 구체적인 이유를 사실 기반으로 상세히 적어줘.
+[실시간 인터넷 검색 결과]:
+${context}
+
+특정 병원을 억지로 추천하도록 편향을 두지 말고, 제공된 실시간 검색 자료를 객관적으로 반영하여 자연스럽게 대답해줘.`;
+            }
 
             const url = `https://api.openai.com/v1/chat/completions`;
             const payload = {
                 model: "gpt-4o-mini",
                 messages: [
-                    {
-                        role: "system",
-                        // 편향 지시 및 억지 추천 유도를 제거한 일반 추천 프롬프트로 수정
-                        content: `너는 질문에 답하는 AI 어시스턴트이다. 사용자의 질문에 대해 일반적으로 추천되거나 많이 거론되는 한의원/병원명을 3곳 내외로 추천하고 구체적인 이유를 상세히 적어줘. 특정 병원을 억지로 추천하도록 편향을 두지 말고, 실제 인터넷 지식과 학습 지식을 기반으로 객관적인 정보만을 담아 자연스럽게 설명해줘.`
-                    },
+                    { role: "system", content: systemPrompt },
                     { role: "user", content: questionText }
                 ],
                 temperature: 0.5
@@ -1246,11 +1260,56 @@
             return this.evaluateTextMentionScore(textResponse, brand);
         }
 
-        async fetchClaudeAudit(questionText) {
+        async fetchPerplexityAuditRawText(questionText) {
+            const apiKey = this.apiKeys.perplexity;
+            if (!apiKey) return '';
+
+            const url = `https://api.perplexity.ai/chat/completions`;
+            const payload = {
+                model: "sonar",
+                messages: [
+                    {
+                        role: "system",
+                        content: `너는 질문에 답하는 AI 검색 엔진이다. 사용자의 질문에 대해 실시간 인터넷 검색 지식을 기반으로 일반적으로 추천되거나 많이 거론되는 한의원/병원명을 3곳 내외로 추천하고 구체적인 이유를 상세히 적어줘. 특정 병원을 억지로 추천하도록 편향을 두지 말고, 실제 검색 데이터에 입각하여 사실 정보만을 담아 자연스럽게 설명해줘.`
+                    },
+                    { role: "user", content: questionText }
+                ],
+                temperature: 0.5
+            };
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) return '';
+                const data = await response.json();
+                return data.choices?.[0]?.message?.content || '';
+            } catch (err) {
+                console.error("Perplexity Raw Text 수집 실패:", err);
+                return '';
+            }
+        }
+
+        async fetchClaudeAudit(questionText, context = '') {
             const apiKey = this.apiKeys.claude;
             const brand = this.targetBrand || '미담한의원';
             
-            const systemPrompt = `너는 질문에 답하는 AI 어시스턴트이다. 사용자의 질문에 대해 일반적으로 추천되거나 많이 거론되는 한의원/병원명을 3곳 내외로 추천하고 구체적인 이유를 상세히 적어줘. 특정 병원을 억지로 추천하도록 편향을 두지 말고, 실제 인터넷 지식과 학습 지식을 기반으로 객관적인 정보만을 담아 자연스럽게 설명해줘.`;
+            let systemPrompt = `너는 질문에 답하는 AI 어시스턴트이다. 사용자의 질문에 대해 일반적으로 추천되거나 많이 거론되는 한의원/병원명을 3곳 내외로 추천하고 구체적인 이유를 상세히 적어줘. 특정 병원을 억지로 추천하도록 편향을 두지 말고, 실제 인터넷 지식과 학습 지식을 기반으로 객관적인 정보만을 담아 자연스럽게 설명해줘.`;
+
+            if (context) {
+                systemPrompt = `너는 질문에 답하는 AI 어시스턴트이다. 제공되는 [실시간 인터넷 검색 결과]를 최신 정보 컨텍스트로 삼아, 사용자의 질문에 대해 신뢰성 높은 최신 병원/브랜드명 3곳 내외를 추천하고 구체적인 이유를 사실 기반으로 상세히 적어줘.
+[실시간 인터넷 검색 결과]:
+${context}
+
+특정 병원을 억지로 추천하도록 편향을 두지 말고, 제공된 실시간 검색 자료를 객관적으로 반영하여 자연스럽게 대답해줘.`;
+            }
+
             const url = `https://api.anthropic.com/v1/messages`;
             const payload = {
                 model: "claude-3-5-sonnet-20241022",
@@ -1296,17 +1355,25 @@
             }
         }
 
-        async fetchGrokAudit(questionText) {
+        async fetchGrokAudit(questionText, context = '') {
             const apiKey = this.apiKeys.grok;
             const brand = this.targetBrand || '미담한의원';
+
+            let systemPrompt = `너는 질문에 답하는 AI 어시스턴트이다. 사용자의 질문에 대해 일반적으로 추천되거나 많이 거론되는 한의원/병원명을 3곳 내외로 추천하고 구체적인 이유를 상세히 적어줘. 특정 병원을 억지로 추천하도록 편향을 두지 말고, 실제 인터넷 지식과 학습 지식을 기반으로 객관적인 정보만을 담아 자연스럽게 설명해줘.`;
+
+            if (context) {
+                systemPrompt = `너는 질문에 답하는 AI 어시스턴트이다. 제공되는 [실시간 인터넷 검색 결과]를 최신 정보 컨텍스트로 삼아, 사용자의 질문에 대해 신뢰성 높은 최신 병원/브랜드명 3곳 내외를 추천하고 구체적인 이유를 사실 기반으로 상세히 적어줘.
+[실시간 인터넷 검색 결과]:
+${context}
+
+특정 병원을 억지로 추천하도록 편향을 두지 말고, 제공된 실시간 검색 자료를 객관적으로 반영하여 자연스럽게 대답해줘.`;
+            }
+
             const url = `https://api.x.ai/v1/chat/completions`;
             const payload = {
                 model: "grok-2-1212",
                 messages: [
-                    {
-                        role: "system",
-                        content: `너는 질문에 답하는 AI 어시스턴트이다. 사용자의 질문에 대해 일반적으로 추천되거나 많이 거론되는 한의원/병원명을 3곳 내외로 추천하고 구체적인 이유를 상세히 적어줘. 특정 병원을 억지로 추천하도록 편향을 두지 말고, 실제 인터넷 지식과 학습 지식을 기반으로 객관적인 정보만을 담아 자연스럽게 설명해줘.`
-                    },
+                    { role: "system", content: systemPrompt },
                     { role: "user", content: questionText }
                 ],
                 temperature: 0.5
@@ -1335,38 +1402,57 @@
         evaluateTextMentionScore(text, brand) {
             if (!text || !brand) return 0;
             
-            // 1차 매칭: 전체 브랜드명 (공백 유연 매칭)
-            const escapedBrand = brand.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-            const regexStr = escapedBrand.split('').join('\\s*');
-            const keywordRegex = new RegExp(`(${regexStr})`, 'gi');
+            // 공백을 모두 제거하고 소문자로 만든 분석 텍스트와 브랜드명
+            const cleanText = text.replace(/\s+/g, '').toLowerCase();
+            const cleanBrandFull = brand.replace(/\s+/g, '').toLowerCase();
             
-            let matches = text.match(keywordRegex);
-            let score = 0;
-            let isFirstRecommend = false;
-
-            if (matches) {
-                const brandIndex = text.search(keywordRegex);
-                isFirstRecommend = brandIndex < 150 && brandIndex !== -1;
-                score = 30 + matches.length * 15;
-                if (isFirstRecommend) score += 30;
+            // 1단계 매칭: 전체 브랜드명 (공백 무관 일치 확인)
+            if (cleanText.includes(cleanBrandFull)) {
+                const escapedBrand = brand.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                const regexStr = escapedBrand.split('').join('\\s*');
+                const keywordRegex = new RegExp(`(${regexStr})`, 'gi');
+                
+                const matches = text.match(keywordRegex) || [brand];
+                const brandIndex = text.toLowerCase().indexOf(brand.toLowerCase());
+                const isFirstRecommend = brandIndex < 350 && brandIndex !== -1;
+                
+                let score = 50 + matches.length * 15;
+                if (isFirstRecommend) score += 20;
                 return Math.min(100, score);
             }
 
-            // 2차 매칭: 부분 매칭 (예: '지유클리닉 강남본점' -> '지유클리닉' 또는 '지유' 등 핵심 키워드 매칭 지원)
-            const cleanBrand = brand.replace(/(강남본점|본점|지점|의원|한의원|클리닉|성형외과|피부과)/g, '').trim();
-            if (cleanBrand.length >= 2) {
-                const escapedSub = cleanBrand.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+            // 2단계 매칭: 지점/지리 수식어만 뺀 브랜드명 (예: '지유클리닉 강남본점' -> '지유클리닉')
+            const noBranchBrand = brand.replace(/\s*(강남본점|강남점|본점|지점|본원)/g, '').trim();
+            const cleanNoBranch = noBranchBrand.replace(/\s+/g, '').toLowerCase();
+            if (cleanNoBranch.length >= 2 && cleanText.includes(cleanNoBranch)) {
+                const escapedSub = noBranchBrand.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
                 const subRegexStr = escapedSub.split('').join('\\s*');
                 const subRegex = new RegExp(`(${subRegexStr})`, 'gi');
                 
-                const subMatches = text.match(subRegex);
-                if (subMatches) {
-                    const subIndex = text.search(subRegex);
-                    isFirstRecommend = subIndex < 180 && subIndex !== -1;
-                    score = 20 + subMatches.length * 10;
-                    if (isFirstRecommend) score += 20;
-                    return Math.min(100, score);
-                }
+                const matches = text.match(subRegex) || [noBranchBrand];
+                const brandIndex = text.toLowerCase().indexOf(noBranchBrand.toLowerCase());
+                const isFirstRecommend = brandIndex < 400 && brandIndex !== -1;
+                
+                let score = 40 + matches.length * 15;
+                if (isFirstRecommend) score += 20;
+                return Math.min(100, score);
+            }
+
+            // 3단계 매칭: 의원/한의원/클리닉 등 업종 수식어까지 전부 뺀 핵심 키워드명 (예: '지유클리닉' -> '지유')
+            const coreBrand = brand.replace(/\s*(강남본점|강남점|본점|지점|본원|의원|한의원|클리닉|성형외과|피부과|치과)/g, '').trim();
+            const cleanCore = coreBrand.replace(/\s+/g, '').toLowerCase();
+            if (cleanCore.length >= 2 && cleanText.includes(cleanCore)) {
+                const escapedCore = coreBrand.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                const coreRegexStr = escapedCore.split('').join('\\s*');
+                const coreRegex = new RegExp(`(${coreRegexStr})`, 'gi');
+                
+                const matches = text.match(coreRegex) || [coreBrand];
+                const brandIndex = text.toLowerCase().indexOf(cleanCore);
+                const isFirstRecommend = brandIndex < 450 && brandIndex !== -1;
+                
+                let score = 30 + matches.length * 10;
+                if (isFirstRecommend) score += 15;
+                return Math.min(100, score);
             }
 
             return 0;
