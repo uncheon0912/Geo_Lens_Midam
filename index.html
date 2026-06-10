@@ -66,6 +66,10 @@
             </nav>
 
             <div class="sidebar-footer">
+                <button id="btn-pdf-tracker-report" class="btn btn-primary btn-block btn-neon-cyan" style="margin-bottom: 8px; display: none;">
+                    <i data-lucide="trending-up"></i>
+                    <span data-i18n="btn_pdf_tracker_report">AI 키워드 추적 보고서 (PDF)</span>
+                </button>
                 <button id="btn-pdf-audit" class="btn btn-primary btn-block btn-neon-purple">
                     <i data-lucide="file-text"></i>
                     <span data-i18n="btn_pdf_report">PDF 보고서 내보내기</span>
@@ -721,6 +725,9 @@
                                 <div id="tracker-question-list" class="question-list">
                                     <!-- Dynamic items will load here -->
                                 </div>
+                                <button id="btn-run-audit-left" class="btn btn-cyan btn-block btn-glow" style="margin-top: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                    <i data-lucide="play"></i> <span data-i18n="btn_run_audit_big">실시간 AEO 추적 분석 시작</span>
+                                </button>
                             </div>
 
                             <hr class="neon-divider">
@@ -730,11 +737,36 @@
                                 <button id="btn-export-tracker" class="btn btn-sm btn-outline-cyan btn-block" style="margin-bottom: 8px;">
                                     <i data-lucide="download"></i> <span data-i18n="btn_export_data">설정 파일 내보내기</span>
                                 </button>
-                                <div class="file-upload-wrapper" style="position: relative; overflow: hidden; display: inline-block; width: 100%;">
+                                <div class="file-upload-wrapper" style="position: relative; overflow: hidden; display: inline-block; width: 100%; margin-bottom: 8px;">
                                     <button class="btn btn-sm btn-outline-purple btn-block">
                                         <i data-lucide="upload"></i> <span data-i18n="btn_import_data">설정 파일 불러오기</span>
                                     </button>
                                     <input type="file" id="btn-import-tracker" accept=".json" style="position: absolute; font-size: 100px; opacity: 0; right: 0; top: 0; cursor: pointer; width: 100%; height: 100%;">
+                                </div>
+                            </div>
+
+                            <hr class="neon-divider">
+
+                            <!-- Email Automatic Scheduler Settings -->
+                            <div class="tracker-scheduler-box" style="background: rgba(0, 0, 0, 0.15); padding: 12px; border-radius: 6px; border: 1px solid var(--border-color);">
+                                <h4 class="section-subtitle" style="display: flex; align-items: center; gap: 6px; margin-bottom: 10px; font-size: 12px;">
+                                    <i data-lucide="mail" class="text-neon-purple" style="width: 14px; height: 14px;"></i>
+                                    <span data-i18n="lbl_scheduler_title">이메일 보고서 자동 발송 설정</span>
+                                </h4>
+                                <div class="form-group" style="margin-bottom: 10px;">
+                                    <label for="scheduler-email" style="font-size: 11px; color: var(--text-muted);" data-i18n="lbl_receiver_email">수신인 이메일 주소</label>
+                                    <input type="email" id="scheduler-email" class="input-dark input-block" style="padding: 8px 10px; font-size: 12px;" placeholder="example@email.com">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 10px;">
+                                    <label for="scheduler-time" style="font-size: 11px; color: var(--text-muted);" data-i18n="lbl_send_time">자동 발송 시각</label>
+                                    <input type="time" id="scheduler-time" class="input-dark input-block" style="padding: 8px 10px; font-size: 12px;" value="09:00">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="switch-container" style="font-size: 11px;">
+                                        <input type="checkbox" id="scheduler-active">
+                                        <span class="slider" style="width: 34px; height: 18px; border-radius: 9px;"></span>
+                                        <span class="switch-label">매일 자동 메일 리포트 발송 활성화</span>
+                                    </label>
                                 </div>
                             </div>
                         </div>

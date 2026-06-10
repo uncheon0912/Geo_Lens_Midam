@@ -17,6 +17,11 @@ const Translations = {
         lbl_target_brand: '분석 타겟 병원/브랜드명',
         btn_export_data: '설정 파일 내보내기',
         btn_import_data: '설정 파일 불러오기',
+        btn_pdf_tracker_report: 'AI 키워드 추적 보고서 (PDF)',
+        btn_run_audit_big: '실시간 AEO 추적 분석 시작',
+        lbl_scheduler_title: '이메일 보고서 자동 발송 설정',
+        lbl_receiver_email: '수신인 이메일 주소',
+        lbl_send_time: '자동 발송 시각',
         btn_pdf_report: 'PDF 보고서 내보내기',
         txt_privacy_secured: '개인정보 보호 모드 작동 중',
         btn_analyze: '분석 시작',
@@ -125,6 +130,11 @@ const Translations = {
         lbl_target_brand: 'Target Brand/Hospital Name',
         btn_export_data: 'Export Configuration',
         btn_import_data: 'Import Configuration',
+        btn_pdf_tracker_report: 'AI Keyword Tracking Report (PDF)',
+        btn_run_audit_big: 'Run Realtime AEO Tracking Audit',
+        lbl_scheduler_title: 'Auto Email Report Scheduler',
+        lbl_receiver_email: 'Recipient Email Address',
+        lbl_send_time: 'Automatic Send Time',
         btn_pdf_report: 'Export PDF Report',
         txt_privacy_secured: 'Privacy Protection Mode Enabled',
         btn_analyze: 'Start Analysis',
@@ -565,6 +575,19 @@ class AppController {
         });
 
         this.activeTab = tabId;
+
+        // Toggle print buttons based on active tab
+        const btnPdfAudit = document.getElementById('btn-pdf-audit');
+        const btnPdfTracker = document.getElementById('btn-pdf-tracker-report');
+        if (btnPdfAudit && btnPdfTracker) {
+            if (tabId === 'tracker') {
+                btnPdfAudit.style.display = 'none';
+                btnPdfTracker.style.display = 'block';
+            } else {
+                btnPdfAudit.style.display = 'block';
+                btnPdfTracker.style.display = 'none';
+            }
+        }
     }
 
     switchLanguage(langCode) {

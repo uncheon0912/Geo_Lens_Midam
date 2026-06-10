@@ -2267,9 +2267,10 @@ h1, h2, h3, h4, h5, h6 {
         padding-bottom: 10px;
     }
 
-    /* Hide settings and chat log from client proposal reports */
+    /* Hide settings, assistant and tracker from general client proposal reports */
     #view-settings,
-    #view-assistant {
+    #view-assistant,
+    #view-tracker {
         display: none !important;
     }
 
@@ -2587,4 +2588,54 @@ body.is-printing .print-branding-header .brand-text {
 }
 body.is-printing .print-only-pane {
     display: block !important;
+}
+
+/* Print Tracker Only Mode */
+@media print {
+    body.print-tracker-only .sidebar,
+    body.print-tracker-only .top-bar,
+    body.print-tracker-only .tab-pane:not(#view-tracker),
+    body.print-tracker-only .tracker-api-box,
+    body.print-tracker-only .keyword-add-form,
+    body.print-tracker-only .tracker-backup-actions,
+    body.print-tracker-only .tracker-scheduler-box,
+    body.print-tracker-only #btn-run-audit-left,
+    body.print-tracker-only #btn-run-audit,
+    body.print-tracker-only .question-item-actions {
+        display: none !important;
+    }
+
+    body.print-tracker-only #view-tracker {
+        display: block !important;
+        break-after: avoid;
+        padding-top: 0 !important;
+    }
+
+    body.print-tracker-only .tracker-layout {
+        display: block !important;
+    }
+
+    body.print-tracker-only .tracker-sidebar-panel {
+        width: 100% !important;
+        height: auto !important;
+        position: static !important;
+        border: none !important;
+        padding: 0 !important;
+        margin-bottom: 20px !important;
+        background: transparent !important;
+    }
+
+    body.print-tracker-only .tracker-main-panel {
+        width: 100% !important;
+    }
+
+    body.print-tracker-only .tracker-bottom-row {
+        display: block !important;
+    }
+
+    body.print-tracker-only .radar-chart-card,
+    body.print-tracker-only .table-card {
+        width: 100% !important;
+        page-break-inside: avoid;
+    }
 }

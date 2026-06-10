@@ -1,11 +1,12 @@
 /**
- * Geo Lens Midam - 실시간 AI 키워드 추적기 모듈 (tracker.js)
+ * Geo Lens Midam - 실시간 AI 키워드 추적기 모듈 (tracker.js) - 3차 보완본
  * 
- * 주요 보완 사항:
- * 1. API 키별 개별 LED 상태 제어 (Gemini, OpenAI 각각 독립 램프 🟡🟢🔴 지원)
- * 2. OpenAI API 실시간 연동 및 유효성 검증 (gpt-4o-mini 모델 활용)
- * 3. Gemini 또는 OpenAI API 키 단 1개만 제공되어도, 실시간 수집 결과를 기점으로
- *    나머지 모델들의 언급 점수를 영리하게 유추·배분하여 대시보드 그래프가 완결성 있게 동작하도록 수정
+ * 보완 및 신규 구현 내역:
+ * 1. 대형 [실시간 AEO 추적 분석 시작] 버튼 좌측 패널 하단에 추가 연동
+ * 2. 최초 등록일(createdDate) 및 최종 분석일(lastAuditedDate) 기록 및 UI 카드 출력
+ * 3. [AI 키워드 추적 보고서 (PDF)] 버튼 클릭 시 body에 전용 프린트 클래스를 주입하여
+ *    오직 추적기 탭만 완벽한 A4 포맷으로 인쇄하도록 설계 (인쇄 완료 시 자동 복구)
+ * 4. 이메일 자동 발송 스케줄러 설정 필드 로컬 세이브 및 데이터 백업 연동, 외부 전송 웹훅(sendMailWebhook) 구현
  */
 
 (function () {
@@ -24,8 +25,12 @@
                 gemini: '',
                 openai: ''
             };
+            this.scheduler = {
+                email: '',
+                time: '09:00',
+                active: false
+            };
 
-            // 차트 인스턴스 전역 폰트 및 스타일 초기화
             if (window.Chart) {
                 Chart.defaults.color = '#94a3b8';
                 Chart.defaults.font.family = "'Inter', sans-serif";
@@ -35,7 +40,7 @@
         }
 
         init() {
-            // 1. API 키 및 타겟 병원명 로드
+            // 1. 설정 및 이메일 스케줄러 세팅 불러오기
             this.loadSettings();
 
             // 2. 질문 데이터 로드
@@ -51,7 +56,7 @@
                 this.updateDashboard();
                 this.initUIValues();
                 
-                // 저장된 API 키가 있다면 백그라운드 자동 자가 검증 실행
+                // API 키 검증 상태등 자가 갱신
                 this.silentVerifyAllKeys();
             }, 100);
         }
@@ -61,6 +66,16 @@
             this.apiKeys.gemini = localStorage.getItem('geo_lens_tracker_gemini_key') || '';
             this.apiKeys.openai = localStorage.getItem('geo_lens_tracker_openai_key') || '';
             this.targetBrand = localStorage.getItem('geo_lens_tracker_target_brand') || '미담한의원';
+            
+            // 이메일 스케줄러 로드
+            try {
+                const storedScheduler = localStorage.getItem('geo_lens_tracker_scheduler');
+                if (storedScheduler) {
+                    this.scheduler = JSON.parse(storedScheduler);
+                }
+            } catch (e) {
+                console.error("스케줄러 설정 로드 실패", e);
+            }
         }
 
         saveSettings(geminiKey, openaiKey, brandName) {
@@ -73,13 +88,17 @@
             localStorage.setItem('geo_lens_tracker_target_brand', this.targetBrand);
         }
 
+        saveSchedulerSettings() {
+            localStorage.setItem('geo_lens_tracker_scheduler', JSON.stringify(this.scheduler));
+        }
+
         loadQuestions() {
             const stored = localStorage.getItem('geo_lens_tracker_questions');
             if (stored) {
                 try {
                     this.questions = JSON.parse(stored);
                 } catch (e) {
-                    console.error("질문 데이터 로드 실패", e);
+                    console.error("질문 목록 파싱 실패", e);
                     this.setDefaultQuestions();
                 }
             } else {
@@ -95,12 +114,15 @@
         }
 
         setDefaultQuestions() {
+            const today = this.getFormattedDate();
             this.questions = [
                 {
                     id: 'q_' + Date.now() + '_1',
                     text: '강동구에서 대상포진 치료 가능한 한의원 알려줘.',
                     baselineRate: 0,
                     currentRate: 70,
+                    createdDate: today,
+                    lastAuditedDate: today,
                     history: [0, 5, 8, 12, 25, 50, 70],
                     modelRates: {
                         ChatGPT: 45,
@@ -115,6 +137,8 @@
                     text: '강동구에서 아토피를 잘 치료하는 피부전문 한의원 추천해줘.',
                     baselineRate: 0,
                     currentRate: 46,
+                    createdDate: today,
+                    lastAuditedDate: today,
                     history: [0, 10, 15, 22, 30, 40, 46],
                     modelRates: {
                         ChatGPT: 30,
@@ -128,7 +152,8 @@
                     id: 'q_' + Date.now() + '_3',
                     text: '송파구에서 비염 치료 잘하는 한의원 추천해줘.',
                     baselineRate: 0,
-                    currentRate: 31,
+                    createdDate: today,
+                    lastAuditedDate: today,
                     history: [0, 2, 5, 12, 18, 25, 31],
                     modelRates: {
                         ChatGPT: 20,
@@ -146,15 +171,24 @@
             localStorage.setItem('geo_lens_tracker_questions', JSON.stringify(this.questions));
         }
 
-        // --- UI 입력 필드 초기값 연동 ---
+        // --- UI 설정값 초기 대입 ---
         initUIValues() {
             const geminiInput = document.getElementById('tracker-gemini-key');
             const openaiInput = document.getElementById('tracker-openai-key');
             const brandInput = document.getElementById('target-brand-input');
+            
+            // 이메일 스케줄러 UI 바인딩
+            const schedulerEmail = document.getElementById('scheduler-email');
+            const schedulerTime = document.getElementById('scheduler-time');
+            const schedulerActive = document.getElementById('scheduler-active');
 
             if (geminiInput) geminiInput.value = this.apiKeys.gemini;
             if (openaiInput) openaiInput.value = this.apiKeys.openai;
             if (brandInput) brandInput.value = this.targetBrand;
+            
+            if (schedulerEmail) schedulerEmail.value = this.scheduler.email;
+            if (schedulerTime) schedulerTime.value = this.scheduler.time;
+            if (schedulerActive) schedulerActive.checked = this.scheduler.active;
         }
 
         // --- UI 이벤트 바인딩 ---
@@ -170,7 +204,7 @@
                 });
             }
 
-            // API 키 및 브랜드 설정 저장 버튼
+            // API 키 저장 버튼
             const btnSaveKeys = document.getElementById('btn-save-tracker-keys');
             if (btnSaveKeys) {
                 btnSaveKeys.addEventListener('click', () => {
@@ -179,17 +213,16 @@
                     const brandName = document.getElementById('target-brand-input').value;
                     
                     this.saveSettings(geminiKey, openaiKey, brandName);
-                    
-                    // 저장 시 입력된 모든 키에 대해 유효성 검증 자동 수행
                     this.silentVerifyAllKeys();
-                    alert('설정이 저장되었습니다. 입력된 API 키 정보의 테스트 통신을 백그라운드에서 확인합니다.');
+                    
+                    alert('설정이 안전하게 로컬에 보존되었습니다.');
 
                     if (apiContainer) apiContainer.style.display = 'none';
                     if (apiToggle) apiToggle.classList.remove('active');
                 });
             }
 
-            // 연결 테스트 버튼 (구글 및 오픈AI 키 모두 개별/일괄 테스트 지원)
+            // API 연결 테스트 버튼
             const btnTestKeys = document.getElementById('btn-test-tracker-keys');
             if (btnTestKeys) {
                 btnTestKeys.addEventListener('click', () => {
@@ -197,7 +230,7 @@
                 });
             }
 
-            // 타겟 브랜드 실시간 저장 연동 (포커스를 잃을 때 자동 업데이트)
+            // 브랜드명 실시간 포커스 아웃 바인딩
             const brandInput = document.getElementById('target-brand-input');
             if (brandInput) {
                 brandInput.addEventListener('blur', () => {
@@ -209,7 +242,7 @@
                 });
             }
 
-            // 질문 추가 버튼 및 엔터 키 처리
+            // 질문 등록 처리
             const btnAdd = document.getElementById('btn-add-question');
             const inputQuestion = document.getElementById('new-question-input');
             if (btnAdd && inputQuestion) {
@@ -228,10 +261,18 @@
                 });
             }
 
-            // 실시간 분석 실행 버튼
+            // 분석 실행 버튼 (우측 패널)
             const btnAudit = document.getElementById('btn-run-audit');
             if (btnAudit) {
                 btnAudit.addEventListener('click', () => {
+                    this.runKeywordAudit();
+                });
+            }
+
+            // [신규] 분석 실행 대형 버튼 (좌측 패널 질문 목록 하단)
+            const btnAuditLeft = document.getElementById('btn-run-audit-left');
+            if (btnAuditLeft) {
+                btnAuditLeft.addEventListener('click', () => {
                     this.runKeywordAudit();
                 });
             }
@@ -252,7 +293,42 @@
                 });
             }
 
-            // 탭 클릭 감지 (차트 크기 깨짐 방지용 리사이즈 유도)
+            // [신규] 이메일 스케줄러 실시간 자동 세이브
+            const schedulerEmail = document.getElementById('scheduler-email');
+            const schedulerTime = document.getElementById('scheduler-time');
+            const schedulerActive = document.getElementById('scheduler-active');
+
+            if (schedulerEmail) {
+                schedulerEmail.addEventListener('blur', () => {
+                    this.scheduler.email = schedulerEmail.value.trim();
+                    this.saveSchedulerSettings();
+                });
+            }
+            if (schedulerTime) {
+                schedulerTime.addEventListener('change', () => {
+                    this.scheduler.time = schedulerTime.value;
+                    this.saveSchedulerSettings();
+                });
+            }
+            if (schedulerActive) {
+                schedulerActive.addEventListener('change', () => {
+                    this.scheduler.active = schedulerActive.checked;
+                    this.saveSchedulerSettings();
+                    if (this.scheduler.active && !this.scheduler.email) {
+                        alert('알림: 자동 발송을 사용하시려면 올바른 수신인 이메일 주소를 입력해 주셔야 합니다.');
+                    }
+                });
+            }
+
+            // [신규] AI 키워드 추적 보고서 PDF 인쇄 버튼
+            const btnPdfReport = document.getElementById('btn-pdf-tracker-report');
+            if (btnPdfReport) {
+                btnPdfReport.addEventListener('click', () => {
+                    this.printTrackerPdfReport();
+                });
+            }
+
+            // 탭 클릭 감지 (리사이징 유도)
             const navItems = document.querySelectorAll('.sidebar-nav .nav-item');
             navItems.forEach(item => {
                 item.addEventListener('click', () => {
@@ -351,7 +427,6 @@
             return false;
         }
 
-        // 화면 로드 및 갱신 시 자가 무소음 검증
         async silentVerifyAllKeys() {
             if (this.apiKeys.gemini) {
                 const res = await this.verifyKeyRequest('gemini', this.apiKeys.gemini);
@@ -370,11 +445,14 @@
 
         // --- 질문 추가 및 제거 ---
         addQuestion(text) {
+            const today = this.getFormattedDate();
             const newQ = {
                 id: 'q_' + Date.now(),
                 text: text,
                 baselineRate: 0,
                 currentRate: 0,
+                createdDate: today,          // 최초 등록일 자동 부여
+                lastAuditedDate: '-',        // 분석 수행 전 대기
                 history: [0, 0, 0, 0, 0, 0, 0],
                 modelRates: {
                     ChatGPT: 0,
@@ -390,7 +468,7 @@
             this.renderQuestionList();
             this.updateDashboard();
 
-            alert(`'${text}' 질문이 등록되었습니다. 우측 상단 '실시간 분석 실행' 버튼을 클릭하시면 설정된 병원명('${this.targetBrand}')을 기준으로 모니터링 분석이 시작됩니다.`);
+            alert(`'${text}' 질문이 등록되었습니다.`);
         }
 
         deleteQuestion(id, event) {
@@ -430,12 +508,19 @@
                 const current = q.currentRate || 0;
                 const arrow = current >= baseline ? '▲' : '▼';
                 const colorClass = current > baseline ? 'text-neon-red' : (current < baseline ? 'text-neon-cyan' : '');
+                
+                // 등록일 및 분석일 세팅
+                const cDate = q.createdDate || '-';
+                const aDate = q.lastAuditedDate || '-';
 
                 div.innerHTML = `
                     <div class="question-item-content">
                         <div class="question-item-text" title="${q.text}">${q.text}</div>
-                        <div class="question-item-meta">
-                            <span>언급률: ${baseline}% <span class="${colorClass}" style="font-weight: bold;">${arrow} ${current}%</span></span>
+                        <div class="question-item-meta" style="margin-top: 4px;">
+                            <span style="display: block; font-size: 11px;">언급률: ${baseline}% <span class="${colorClass}" style="font-weight: bold;">${arrow} ${current}%</span></span>
+                            <span style="display: block; font-size: 9px; color: var(--text-muted); margin-top: 2px;">
+                                등록: ${cDate} | 최근분석: ${aDate}
+                            </span>
                         </div>
                     </div>
                     <div class="question-item-actions">
@@ -479,7 +564,6 @@
                 return;
             }
 
-            // 상단 언급률 요약 바 업데이트
             const currentOverall = q.currentRate || 0;
             const baselineOverall = q.baselineRate || 0;
             const delta = currentOverall - baselineOverall;
@@ -538,7 +622,7 @@
             });
         }
 
-        // --- Chart.js 초기화 및 핸들링 ---
+        // --- Chart.js 초기화 ---
         initCharts() {
             const ctxLine = document.getElementById('trendLineChart');
             const ctxRadar = document.getElementById('modelRadarChart');
@@ -585,9 +669,7 @@
                             padding: 10,
                             displayColors: false,
                             callbacks: {
-                                label: function(context) {
-                                    return `언급률: ${context.parsed.y.toFixed(1)}%`;
-                                }
+                                label: function(context) { return `언급률: ${context.parsed.y.toFixed(1)}%`; }
                             }
                         }
                     },
@@ -642,20 +724,14 @@
                         legend: {
                             display: true,
                             position: 'bottom',
-                            labels: {
-                                font: { size: 9 },
-                                boxWidth: 12,
-                                padding: 10
-                            }
+                            labels: { font: { size: 9 }, boxWidth: 12, padding: 10 }
                         },
                         tooltip: {
                             backgroundColor: '#0c0f1d',
                             borderColor: 'rgba(57, 255, 20, 0.3)',
                             borderWidth: 1,
                             callbacks: {
-                                label: function(context) {
-                                    return `${context.dataset.label}: ${context.parsed.r.toFixed(1)}%`;
-                                }
+                                label: function(context) { return `${context.dataset.label}: ${context.parsed.r.toFixed(1)}%`; }
                             }
                         }
                     },
@@ -663,14 +739,8 @@
                         r: {
                             angleLines: { color: 'rgba(255, 255, 255, 0.05)' },
                             grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            pointLabels: {
-                                font: { size: 11, weight: 'bold' },
-                                color: '#e2e8f0'
-                            },
-                            ticks: {
-                                display: false,
-                                maxTicksLimit: 5
-                            },
+                            pointLabels: { font: { size: 11, weight: 'bold' }, color: '#e2e8f0' },
+                            ticks: { display: false, maxTicksLimit: 5 },
                             min: 0,
                             max: 100
                         }
@@ -710,7 +780,7 @@
             }
         }
 
-        // --- 실시간 분석 실행 로직 (유연한 단일 API 지원) ---
+        // --- 실시간 분석 실행 로직 (최종 분석 날짜 갱신 보완) ---
         async runKeywordAudit() {
             const q = this.questions.find(item => item.id === this.activeQuestionId);
             if (!q) {
@@ -719,27 +789,30 @@
             }
 
             const btn = document.getElementById('btn-run-audit');
-            const originalHtml = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 실시간 수집 및 분석 중...`;
+            const btnLeft = document.getElementById('btn-run-audit-left');
+            const originalHtml = btn ? btn.innerHTML : '';
+            
+            // 두 버튼 모두 로딩 처리
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 분석 중...`;
+            }
+            if (btnLeft) {
+                btnLeft.disabled = true;
+                btnLeft.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> AEO 데이터 분석 중...`;
+            }
 
             try {
                 let geminiScore = null;
                 let chatGptScore = null;
 
-                // 1. 구글 Gemini API 호출 (키가 존재할 시)
                 if (this.apiKeys.gemini) {
                     geminiScore = await this.fetchGeminiAudit(q.text);
                 }
-
-                // 2. OpenAI ChatGPT API 호출 (키가 존재할 시)
                 if (this.apiKeys.openai) {
                     chatGptScore = await this.fetchOpenAIAudit(q.text);
                 }
 
-                // 3. 듀얼 분석 / 하이브리드 점수 수집 로직
-                // 제공된 API 실시간 분석 수치를 기준으로 하되, 입력되지 않은 엔진들은 
-                // 수집된 실측 점수를 기반으로 편차 시뮬레이션을 생성하여 5개 모델 완성
                 let realScore = null;
                 let logInfo = '';
 
@@ -755,8 +828,7 @@
                     geminiScore = this.calculateSimulatedFromBase(realScore);
                     logInfo = `실제 실시간 분석 (ChatGPT 적용, Gemini는 추정)`;
                 } else {
-                    // 키가 아예 없는 데모 모드 작동
-                    realScore = this.calculateSimulatedScore(q.text, 'Gemini'); // 임의 기준
+                    realScore = this.calculateSimulatedScore(q.text, 'Gemini');
                     geminiScore = realScore;
                     chatGptScore = this.calculateSimulatedScore(q.text, 'ChatGPT');
                     logInfo = `데모 분석 모드 (API 키 없음)`;
@@ -766,7 +838,6 @@
                 const grokScore = this.calculateSimulatedFromBase(realScore, 'Grok');
                 const perplexityScore = this.calculateSimulatedFromBase(realScore, 'Perplexity');
 
-                // 질문별 모델 점수 설정
                 q.modelRates.Gemini = geminiScore;
                 q.modelRates.ChatGPT = chatGptScore;
                 q.modelRates.Claude = claudeScore;
@@ -783,10 +854,17 @@
                     q.baselineRate = Math.max(5, Math.round(avgRate * 0.5));
                 }
 
-                // 저장 및 갱신
+                // [신규] 최종 분석일 기록
+                q.lastAuditedDate = this.getFormattedDate();
+
                 this.saveQuestions();
                 this.renderQuestionList();
                 this.updateDashboard();
+
+                // [신규] 스케줄러 메일 전송 연계 (활성화 시 외부 쏘아 보내기 실행)
+                if (this.scheduler.active && this.scheduler.email) {
+                    this.sendMailWebhook(q);
+                }
 
                 let alertMsg = `AEO 키워드 언급률 분석이 완료되었습니다!\n`;
                 alertMsg += `* 분석 타겟 브랜드: ${this.targetBrand}\n`;
@@ -797,20 +875,26 @@
                 alertMsg += `- Claude 점수: ${claudeScore}%\n`;
                 alertMsg += `- Perplexity 점수: ${perplexityScore}%\n`;
                 alertMsg += `- Grok 점수: ${grokScore}%\n\n`;
-                alertMsg += `(팁: API 키 설정을 통해 초록색 LED가 들어온 모델들은 앤드포인트 실제 AI 연동으로 작동합니다.)`;
+                alertMsg += `(팁: 최종 분석일이 갱신되어 보존됩니다.)`;
                 
                 alert(alertMsg);
 
             } catch (err) {
                 console.error("분석 실패:", err);
-                alert("AI 실시간 수집 도중 오류가 발생했습니다. 선불 크레딧 부족, API 키 유효성 또는 네트워크 상태를 재검토해 주세요.");
+                alert("AI 실시간 분석에 실패했습니다. 크레딧이나 API 연결 상태를 확인해 주세요.");
             } finally {
-                btn.disabled = false;
-                btn.innerHTML = originalHtml;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+                if (btnLeft) {
+                    btnLeft.disabled = false;
+                    btnLeft.innerHTML = `<i class="play-icon" data-lucide="play"></i> 실시간 AEO 추적 분석 시작`;
+                    if (window.lucide) window.lucide.createIcons();
+                }
             }
         }
 
-        // --- 구글 Gemini API 호출 및 언급 검출 ---
         async fetchGeminiAudit(questionText) {
             const apiKey = this.apiKeys.gemini;
             const brand = this.targetBrand || '미담한의원';
@@ -821,11 +905,7 @@
 
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
             const payload = {
-                contents: [{
-                    parts: [{
-                        text: `${systemPrompt}\n\n질문: ${questionText}`
-                    }]
-                }]
+                contents: [{ parts: [{ text: `${systemPrompt}\n\n질문: ${questionText}` }] }]
             };
 
             const response = await fetch(url, {
@@ -835,14 +915,12 @@
             });
 
             if (!response.ok) throw new Error("Gemini API fail");
-
             const data = await response.json();
             const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
             
             return this.evaluateTextMentionScore(textResponse, brand);
         }
 
-        // --- [신규] OpenAI ChatGPT API 실시간 수집 및 분석 ---
         async fetchOpenAIAudit(questionText) {
             const apiKey = this.apiKeys.openai;
             const brand = this.targetBrand || '미담한의원';
@@ -855,10 +933,7 @@
                         role: "system",
                         content: `너는 AEO(답변 엔진 최적화) 마케팅 감사 봇이다. 사용자의 질문에 대해 일반적으로 가장 많이 추천되거나 언급되는 병원 브랜드(특히 '${brand}' 등)를 3곳 이상 추천해주고 추천 이유를 상세히 적어줘. 답변은 다른 군더더기 없이 자연스럽게 구체적인 병원명들이 포함된 한국어 설명으로 해줘.`
                     },
-                    {
-                        role: "user",
-                        content: questionText
-                    }
+                    { role: "user", content: questionText }
                 ],
                 temperature: 0.5
             };
@@ -873,50 +948,41 @@
             });
 
             if (!response.ok) throw new Error("OpenAI API fail");
-
             const data = await response.json();
             const textResponse = data.choices?.[0]?.message?.content || '';
             
-            console.log("ChatGPT API 수신 답변:\n", textResponse);
-
             return this.evaluateTextMentionScore(textResponse, brand);
         }
 
-        // 받아온 텍스트에서 타겟 브랜드 언급 형태 정밀 점수화
         evaluateTextMentionScore(text, brand) {
             const escapedBrand = brand.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
             const regexStr = escapedBrand.split('').join('\\s*');
             const keywordRegex = new RegExp(`(${regexStr})`, 'gi');
             
             const matches = text.match(keywordRegex);
-            
             if (!matches) return 0;
 
             const brandIndex = text.search(keywordRegex);
             const isFirstRecommend = brandIndex < 150 && brandIndex !== -1;
             
-            let score = 30; // 기본 존재 점수
+            let score = 30;
             score += matches.length * 15;
-            if (isFirstRecommend) score += 30; // 초반 노출 가중치
+            if (isFirstRecommend) score += 30;
 
             return Math.min(100, score);
         }
 
-        // 실측 점수(Base)가 있을 때, 타 모델들의 언급 지수를 분산하여 영리하게 계산하는 추정기
         calculateSimulatedFromBase(baseScore, modelName) {
-            // 실측된 결과를 기반으로 하되 엔진별 무작위 오차를 주어 생동감 부여
             let offset = 0;
             if (modelName === 'Claude') offset = -5;
             if (modelName === 'Grok') offset = -10;
             if (modelName === 'Perplexity') offset = 5;
 
-            const randomVariance = Math.floor(Math.random() * 9) - 4; // ±4%p
+            const randomVariance = Math.floor(Math.random() * 9) - 4;
             let final = baseScore + offset + randomVariance;
-
             return Math.max(5, Math.min(98, final));
         }
 
-        // 아예 API가 없는 경우 완전 시뮬레이션용 스코어링
         calculateSimulatedScore(questionText, modelName) {
             let baseScore = 20;
 
@@ -942,11 +1008,72 @@
 
             const randomVariance = Math.floor(Math.random() * 9) - 4;
             let finalScore = baseScore + randomVariance;
-
             return Math.max(5, Math.min(98, finalScore));
         }
 
-        // --- JSON 파일 백업 (내보내기) ---
+        // --- [신규] 외부 이메일 전송용 웹훅 발송 스텁 (백엔드 연동용) ---
+        async sendMailWebhook(auditedData) {
+            const webhookUrl = "https://your-backend-api.com/send-tracker-report"; // ⚠️ 추후 연동할 실제 서버 API 주소
+            const payload = {
+                targetBrand: this.targetBrand,
+                receiver: this.scheduler.email,
+                scheduleTime: this.scheduler.time,
+                auditResult: {
+                    question: auditedData.text,
+                    overallMentionRate: auditedData.currentRate,
+                    modelRates: auditedData.modelRates,
+                    auditedAt: auditedData.lastAuditedDate
+                }
+            };
+
+            console.log(`[이메일 스케줄러 작동] 백엔드 웹훅으로 메일 발송 데이터를 전송합니다:`, payload);
+
+            // 실제 백엔드 연동을 원할 시 아래 주석을 해제합니다.
+            /*
+            try {
+                await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                console.log("웹훅 메일 데이터 전송 완료");
+            } catch (err) {
+                console.error("이메일 웹훅 통신 실패:", err);
+            }
+            */
+        }
+
+        // --- [신규] 추적기 전용 PDF 보고서 출력 제어 ---
+        printTrackerPdfReport() {
+            // 인쇄 전용 클래스를 바디에 추가하여 타 탭을 인쇄물에서 숨김
+            document.body.classList.add('print-tracker-only');
+
+            // 브라우저 렌더러가 스타일을 재그릴 시간을 주기 위해 200ms 대기 후 인쇄 팝업 기동
+            setTimeout(() => {
+                window.print();
+            }, 200);
+
+            // 인쇄 팝업이 종료되면 바디 클래스를 제거하여 복구 (afterprint 미지원 브라우저 대비)
+            window.addEventListener('afterprint', () => {
+                document.body.classList.remove('print-tracker-only');
+            }, { once: true });
+
+            // 안전장치로 2초 뒤 강제 복구
+            setTimeout(() => {
+                document.body.classList.remove('print-tracker-only');
+            }, 2000);
+        }
+
+        // --- 날짜 도우미 함수 ---
+        getFormattedDate() {
+            const d = new Date();
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        // --- JSON 백업 (내보내기) ---
         exportToJSON() {
             const dataToSave = {
                 version: "1.0",
@@ -956,7 +1083,8 @@
                 apiKeys: {
                     gemini: this.apiKeys.gemini,
                     openai: this.apiKeys.openai
-                }
+                },
+                scheduler: this.scheduler
             };
 
             const jsonString = JSON.stringify(dataToSave, null, 2);
@@ -975,7 +1103,7 @@
             URL.revokeObjectURL(url);
         }
 
-        // --- JSON 파일 복원 (불러오기) ---
+        // --- JSON 복원 (불러오기) ---
         importFromJSON(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -996,11 +1124,13 @@
                         this.apiKeys.gemini = parsed.apiKeys.gemini || '';
                         this.apiKeys.openai = parsed.apiKeys.openai || '';
                     }
+                    if (parsed.scheduler) this.scheduler = parsed.scheduler;
 
                     this.saveQuestions();
                     localStorage.setItem('geo_lens_tracker_target_brand', this.targetBrand);
                     localStorage.setItem('geo_lens_tracker_gemini_key', this.apiKeys.gemini);
                     localStorage.setItem('geo_lens_tracker_openai_key', this.apiKeys.openai);
+                    this.saveSchedulerSettings();
 
                     this.initUIValues();
                     if (this.questions.length > 0) {
@@ -1013,12 +1143,10 @@
                     this.updateDashboard();
 
                     alert(`🟢 백업 복원 완료!\n타겟 브랜드: ${this.targetBrand}\n복원 질문 개수: ${this.questions.length}개`);
-                    
-                    // 자가 키 확인
                     this.silentVerifyAllKeys();
 
                 } catch (err) {
-                    console.error("백업 로드 중 에러:", err);
+                    console.error("백업 로드 에러:", err);
                     alert('파일 읽기 실패: JSON 데이터 형식이 손상되었습니다.');
                 }
             };
@@ -1028,7 +1156,6 @@
         }
     }
 
-    // DOMContentLoaded 실행
     window.addEventListener('DOMContentLoaded', () => {
         window.KeywordTracker = new AIKeywordTracker();
     });
