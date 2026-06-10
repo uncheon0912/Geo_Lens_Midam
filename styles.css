@@ -298,17 +298,31 @@ h1, h2, h3, h4, h5, h6 {
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    transition: var(--transition-fast);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
     border: 1px solid transparent;
+    position: relative;
+    top: 0;
+    overflow: hidden;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35) !important;
+}
+
+.btn:active {
+    transform: translateY(1px) !important;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2) !important;
 }
 
 .btn-cyan {
     background-color: var(--neon-cyan);
     color: #000;
+    box-shadow: 0 2px 8px rgba(0, 242, 254, 0.15);
 }
 .btn-cyan:hover {
-    background-color: #00d9e5;
-    box-shadow: 0 0 15px var(--neon-cyan);
+    background-color: #00e5f2;
+    box-shadow: 0 0 18px rgba(0, 242, 254, 0.5), 0 6px 20px rgba(0, 0, 0, 0.3) !important;
 }
 
 .btn-outline-purple {
@@ -317,8 +331,8 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--neon-purple);
 }
 .btn-outline-purple:hover {
-    background: rgba(243, 85, 218, 0.08);
-    box-shadow: 0 0 10px var(--neon-purple-glow);
+    background: rgba(243, 85, 218, 0.15) !important;
+    box-shadow: 0 0 15px rgba(243, 85, 218, 0.35), 0 6px 20px rgba(0, 0, 0, 0.2) !important;
 }
 
 .btn-outline-cyan {
@@ -327,17 +341,45 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--neon-cyan);
 }
 .btn-outline-cyan:hover {
-    background: rgba(0, 242, 254, 0.08);
-    box-shadow: 0 0 10px var(--neon-cyan-glow);
+    background: rgba(0, 242, 254, 0.15) !important;
+    box-shadow: 0 0 15px rgba(0, 242, 254, 0.35), 0 6px 20px rgba(0, 0, 0, 0.2) !important;
 }
 
 .btn-purple {
     background-color: var(--neon-purple);
     color: #fff;
+    box-shadow: 0 2px 8px rgba(243, 85, 218, 0.15);
 }
 .btn-purple:hover {
-    background-color: #e23fc7;
-    box-shadow: 0 0 15px var(--neon-purple);
+    background-color: #f052d9;
+    box-shadow: 0 0 18px rgba(243, 85, 218, 0.5), 0 6px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* 빛이 훑고 지나가는 Shimmer 애니메이션 효과 */
+.btn-glow {
+    position: relative;
+    overflow: hidden;
+}
+.btn-glow::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -50%;
+    width: 200%;
+    height: 100%;
+    background: linear-gradient(
+        to right,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.2) 50%,
+        rgba(255, 255, 255, 0) 100%
+    );
+    transform: skewX(-25deg);
+    transition: 0.75s;
+    opacity: 0;
+}
+.btn-glow:hover::after {
+    left: 125%;
+    opacity: 1;
 }
 
 .btn-neon-purple {
@@ -1809,7 +1851,7 @@ h1, h2, h3, h4, h5, h6 {
     flex-direction: column;
     padding: 20px;
     height: calc(100vh - 140px);
-    overflow-y: auto;
+    overflow-y: auto !important; /* 세로 스크롤 명시적 보장 */
     position: sticky;
     top: 20px;
 }
@@ -1819,7 +1861,7 @@ h1, h2, h3, h4, h5, h6 {
     border: 1px solid var(--border-color);
     border-radius: 6px;
     margin-bottom: 15px;
-    overflow: hidden;
+    overflow: visible; /* 자식 요소 팝업 및 잘림 방지를 위해 visible 처리 */
 }
 
 .api-toggle-header {
@@ -1858,6 +1900,8 @@ h1, h2, h3, h4, h5, h6 {
     padding: 14px;
     border-top: 1px solid var(--border-color);
     background: rgba(0, 0, 0, 0.1);
+    max-height: 200px; /* 내부 최대 높이를 설정하여 스크롤 유도 */
+    overflow-y: auto;  /* 내부 세로 스크롤 가능케 조치 */
 }
 
 .input-with-btn {
@@ -2618,6 +2662,10 @@ body.is-printing .print-only-pane {
 
 /* Print Tracker Only Mode */
 @media print {
+    @page {
+        size: landscape;
+        margin: 10mm;
+    }
     body.print-tracker-only .sidebar,
     body.print-tracker-only .top-bar,
     body.print-tracker-only .tab-pane:not(#view-tracker),
@@ -2713,4 +2761,36 @@ body.is-printing .print-only-pane {
     border: 1px solid #f59e0b;
     color: #f59e0b;
     background: rgba(245, 158, 11, 0.05);
+}
+
+/* AI 키워드 추적 보고서 (PDF) 전용 노란색 3D 입체 버튼 효과 */
+.btn-neon-yellow-3d {
+    background: linear-gradient(135deg, #ffe600 0%, #d4b200 100%) !important;
+    border: none !important;
+    color: #0c0f1d !important;
+    font-weight: 800 !important;
+    font-size: 13px !important;
+    text-shadow: 0 1px 1px rgba(255, 255, 255, 0.45) !important;
+    box-shadow: 0 4px 0px #9a8100, 0 6px 12px rgba(0, 0, 0, 0.45) !important;
+    transition: all 0.1s ease !important;
+    position: relative;
+    top: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.btn-neon-yellow-3d:hover {
+    background: linear-gradient(135deg, #fff263 0%, #e8c600 100%) !important;
+    box-shadow: 0 4px 0px #9a8100, 0 8px 16px rgba(255, 230, 0, 0.25) !important;
+    top: -1px;
+}
+
+.btn-neon-yellow-3d:active {
+    box-shadow: 0 1px 0px #9a8100, 0 2px 4px rgba(0, 0, 0, 0.4) !important;
+    top: 3px !important; /* 클릭 시 3D 눌림 피드백 적용 */
 }

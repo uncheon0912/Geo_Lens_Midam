@@ -943,7 +943,7 @@
                 }
                 if (btnLeft) {
                     btnLeft.disabled = false;
-                    btnLeft.innerHTML = `<i class="play-icon" data-lucide="play"></i> 실시간 AEO 추적 분석 시작`;
+                    btnLeft.innerHTML = `<i class="play-icon" data-lucide="play"></i> 실시간 GEO 추적 분석시작`;
                     if (window.lucide) window.lucide.createIcons();
                 }
             }
