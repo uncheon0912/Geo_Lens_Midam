@@ -707,6 +707,20 @@
                                         </div>
                                         <input type="password" id="tracker-perplexity-key" class="input-dark input-block" placeholder="pplx-... (실시간 웹 검색 실측용)">
                                     </div>
+                                    <div class="form-group" style="margin-top: 10px;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+                                            <label for="tracker-claude-key">Claude API Key</label>
+                                            <span id="claude-status-led" class="api-status-led status-pending" title="연결 상태: 대기"></span>
+                                        </div>
+                                        <input type="password" id="tracker-claude-key" class="input-dark input-block" placeholder="sk-ant-... (Claude API 키 입력)">
+                                    </div>
+                                    <div class="form-group" style="margin-top: 10px;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+                                            <label for="tracker-grok-key">Grok API Key</label>
+                                            <span id="grok-status-led" class="api-status-led status-pending" title="연결 상태: 대기"></span>
+                                        </div>
+                                        <input type="password" id="tracker-grok-key" class="input-dark input-block" placeholder="xai-... (Grok API 키 입력)">
+                                    </div>
                                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px;">
                                         <button id="btn-save-tracker-keys" class="btn btn-sm btn-cyan">키 저장</button>
                                         <button id="btn-test-tracker-keys" class="btn btn-sm btn-outline-purple">연결 테스트</button>
@@ -742,6 +756,9 @@
                                     </button>
                                     <input type="file" id="btn-import-tracker" accept=".json" style="position: absolute; font-size: 100px; opacity: 0; right: 0; top: 0; cursor: pointer; width: 100%; height: 100%;">
                                 </div>
+                                <button id="btn-reset-tracker" class="btn btn-sm btn-outline-neon-red btn-block">
+                                    <i data-lucide="refresh-cw"></i> <span>새로 등록하기</span>
+                                </button>
                             </div>
 
                             <hr class="neon-divider">
@@ -939,6 +956,36 @@
                 <button id="btn-run-paste-analysis" class="btn btn-purple btn-glow">
                     <i data-lucide="play"></i>
                     <span data-i18n="btn_run_analysis">소스 분석 시작</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 새로 등록하기 경고 모달 -->
+    <div class="modal-overlay" id="modal-confirm-reset-overlay" style="display: none;">
+        <div class="modal-box glass-panel border-neon-red" style="max-width: 460px; padding: 0;">
+            <div class="modal-header" style="border-bottom: 1px solid rgba(255, 0, 85, 0.2);">
+                <h3 class="modal-title text-neon-red">
+                    <i data-lucide="alert-triangle" class="text-neon-red"></i>
+                    <span>새로 등록하기 경고</span>
+                </h3>
+                <button class="btn-close-modal" id="btn-close-reset-modal"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body" style="padding: 24px;">
+                <p class="modal-desc" style="color: var(--text-color); font-size: 14px; line-height: 1.6; margin-bottom: 0;">
+                    새로 등록하기를 진행하면 기존에 저장되어 있던 <strong>병원명</strong>과 <strong>질문 목록</strong>이 모두 삭제됩니다.<br><br>
+                    데이터 유실 방지를 위해 초기화 전에 현재 설정을 백업하는 것을 권장합니다. 기존 정보를 컴퓨터에 저장하시겠습니까?
+                </p>
+            </div>
+            <div class="modal-footer" style="flex-direction: column; gap: 8px; align-items: stretch; padding: 16px 24px; background: rgba(0, 0, 0, 0.2); border-top: 1px solid var(--border-color);">
+                <button id="btn-reset-save-export" class="btn btn-cyan btn-glow-cyan" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px;">
+                    <i data-lucide="download"></i> 내 컴퓨터에 저장하고 초기화
+                </button>
+                <button id="btn-reset-discard-all" class="btn btn-pink btn-glow-pink" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px;">
+                    <i data-lucide="trash-2"></i> 저장 없이 바로 초기화
+                </button>
+                <button id="btn-reset-cancel" class="btn btn-outline-gray" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px;">
+                    <i data-lucide="x"></i> 취소
                 </button>
             </div>
         </div>

@@ -24,7 +24,9 @@
             this.apiKeys = {
                 gemini: '',
                 openai: '',
-                perplexity: ''
+                perplexity: '',
+                claude: '',
+                grok: ''
             };
             this.scheduler = {
                 email: '',
@@ -67,6 +69,8 @@
             this.apiKeys.gemini = localStorage.getItem('geo_lens_tracker_gemini_key') || '';
             this.apiKeys.openai = localStorage.getItem('geo_lens_tracker_openai_key') || '';
             this.apiKeys.perplexity = localStorage.getItem('geo_lens_tracker_perplexity_key') || '';
+            this.apiKeys.claude = localStorage.getItem('geo_lens_tracker_claude_key') || '';
+            this.apiKeys.grok = localStorage.getItem('geo_lens_tracker_grok_key') || '';
             this.targetBrand = localStorage.getItem('geo_lens_tracker_target_brand') || '미담한의원';
             
             // 이메일 스케줄러 로드
@@ -80,15 +84,19 @@
             }
         }
 
-        saveSettings(geminiKey, openaiKey, perplexityKey, brandName) {
+        saveSettings(geminiKey, openaiKey, perplexityKey, claudeKey, grokKey, brandName) {
             this.apiKeys.gemini = geminiKey.trim();
             this.apiKeys.openai = openaiKey.trim();
             this.apiKeys.perplexity = perplexityKey.trim();
+            this.apiKeys.claude = claudeKey.trim();
+            this.apiKeys.grok = grokKey.trim();
             this.targetBrand = brandName.trim() || '미담한의원';
 
             localStorage.setItem('geo_lens_tracker_gemini_key', this.apiKeys.gemini);
             localStorage.setItem('geo_lens_tracker_openai_key', this.apiKeys.openai);
             localStorage.setItem('geo_lens_tracker_perplexity_key', this.apiKeys.perplexity);
+            localStorage.setItem('geo_lens_tracker_claude_key', this.apiKeys.claude);
+            localStorage.setItem('geo_lens_tracker_grok_key', this.apiKeys.grok);
             localStorage.setItem('geo_lens_tracker_target_brand', this.targetBrand);
         }
 
@@ -180,6 +188,8 @@
             const geminiInput = document.getElementById('tracker-gemini-key');
             const openaiInput = document.getElementById('tracker-openai-key');
             const perplexityInput = document.getElementById('tracker-perplexity-key');
+            const claudeInput = document.getElementById('tracker-claude-key');
+            const grokInput = document.getElementById('tracker-grok-key');
             const brandInput = document.getElementById('target-brand-input');
             
             // 이메일 스케줄러 UI 바인딩
@@ -190,6 +200,8 @@
             if (geminiInput) geminiInput.value = this.apiKeys.gemini;
             if (openaiInput) openaiInput.value = this.apiKeys.openai;
             if (perplexityInput) perplexityInput.value = this.apiKeys.perplexity;
+            if (claudeInput) claudeInput.value = this.apiKeys.claude || '';
+            if (grokInput) grokInput.value = this.apiKeys.grok || '';
             if (brandInput) brandInput.value = this.targetBrand;
             
             if (schedulerEmail) schedulerEmail.value = this.scheduler.email;
@@ -217,9 +229,11 @@
                     const geminiKey = document.getElementById('tracker-gemini-key').value;
                     const openaiKey = document.getElementById('tracker-openai-key').value;
                     const perplexityKey = document.getElementById('tracker-perplexity-key').value;
+                    const claudeKey = document.getElementById('tracker-claude-key').value;
+                    const grokKey = document.getElementById('tracker-grok-key').value;
                     const brandName = document.getElementById('target-brand-input').value;
                     
-                    this.saveSettings(geminiKey, openaiKey, perplexityKey, brandName);
+                    this.saveSettings(geminiKey, openaiKey, perplexityKey, claudeKey, grokKey, brandName);
                     this.silentVerifyAllKeys();
                     
                     alert('설정이 안전하게 로컬에 보존되었습니다.');
@@ -361,6 +375,47 @@
                     }
                 });
             });
+            // [신규] 새로 등록하기 경고 모달 제어 이벤트 바인딩
+            const btnResetTracker = document.getElementById('btn-reset-tracker');
+            const modalResetOverlay = document.getElementById('modal-confirm-reset-overlay');
+            const btnCloseResetModal = document.getElementById('btn-close-reset-modal');
+            const btnResetSaveExport = document.getElementById('btn-reset-save-export');
+            const btnResetDiscardAll = document.getElementById('btn-reset-discard-all');
+            const btnResetCancel = document.getElementById('btn-reset-cancel');
+
+            if (btnResetTracker && modalResetOverlay) {
+                btnResetTracker.addEventListener('click', () => {
+                    modalResetOverlay.style.display = 'flex';
+                });
+            }
+
+            const hideResetModal = () => {
+                if (modalResetOverlay) {
+                    modalResetOverlay.style.display = 'none';
+                }
+            };
+
+            if (btnCloseResetModal) {
+                btnCloseResetModal.addEventListener('click', hideResetModal);
+            }
+            if (btnResetCancel) {
+                btnResetCancel.addEventListener('click', hideResetModal);
+            }
+
+            if (btnResetSaveExport) {
+                btnResetSaveExport.addEventListener('click', () => {
+                    this.exportToJSON();
+                    this.resetTrackerData();
+                    hideResetModal();
+                });
+            }
+
+            if (btnResetDiscardAll) {
+                btnResetDiscardAll.addEventListener('click', () => {
+                    this.resetTrackerData();
+                    hideResetModal();
+                });
+            }
         }
 
         // --- LED 상태 표시등 업데이트 ---
@@ -369,6 +424,8 @@
             if (model === 'gemini') ledId = 'gemini-status-led';
             else if (model === 'openai') ledId = 'openai-status-led';
             else if (model === 'perplexity') ledId = 'perplexity-status-led';
+            else if (model === 'claude') ledId = 'claude-status-led';
+            else if (model === 'grok') ledId = 'grok-status-led';
 
             const led = document.getElementById(ledId);
             if (!led) return;
@@ -391,8 +448,10 @@
             const geminiKey = document.getElementById('tracker-gemini-key').value.trim();
             const openaiKey = document.getElementById('tracker-openai-key').value.trim();
             const perplexityKey = document.getElementById('tracker-perplexity-key').value.trim();
+            const claudeKey = document.getElementById('tracker-claude-key').value.trim();
+            const grokKey = document.getElementById('tracker-grok-key').value.trim();
 
-            if (!geminiKey && !openaiKey && !perplexityKey) {
+            if (!geminiKey && !openaiKey && !perplexityKey && !claudeKey && !grokKey) {
                 alert('검증할 API Key를 하나 이상 입력해 주세요.');
                 return;
             }
@@ -424,6 +483,24 @@
                 results.push(`Perplexity API: ${res ? '🟢 성공' : '🔴 실패'}`);
             } else {
                 this.updateLedState('perplexity', 'pending');
+            }
+
+            if (claudeKey) {
+                this.updateLedState('claude', 'pending');
+                const res = await this.verifyKeyRequest('claude', claudeKey);
+                this.updateLedState('claude', res ? 'connected' : 'error');
+                results.push(`Claude API: ${res ? '🟢 성공' : '🔴 실패'}`);
+            } else {
+                this.updateLedState('claude', 'pending');
+            }
+
+            if (grokKey) {
+                this.updateLedState('grok', 'pending');
+                const res = await this.verifyKeyRequest('grok', grokKey);
+                this.updateLedState('grok', res ? 'connected' : 'error');
+                results.push(`Grok API: ${res ? '🟢 성공' : '🔴 실패'}`);
+            } else {
+                this.updateLedState('grok', 'pending');
             }
 
             alert(`연결 테스트 결과:\n\n${results.join('\n')}\n\n실패로 표시된 모델은 키 유효 기간, 오타, 또는 잔액(Credit) 부족 현상일 수 있습니다.`);
@@ -469,6 +546,55 @@
                         })
                     });
                     return response.ok;
+                } else if (model === 'claude') {
+                    const url = `https://api.anthropic.com/v1/messages`;
+                    const payload = {
+                        model: "claude-3-5-sonnet-20241022",
+                        max_tokens: 1,
+                        messages: [{ role: "user", content: "H" }]
+                    };
+                    const headers = {
+                        'Content-Type': 'application/json',
+                        'x-api-key': key,
+                        'anthropic-version': '2023-06-01',
+                        'anthropic-dangerous-direct-browser-access': 'true'
+                    };
+                    
+                    let response;
+                    try {
+                        response = await fetch(url, {
+                            method: 'POST',
+                            headers: headers,
+                            body: JSON.stringify(payload)
+                        });
+                    } catch (e) {
+                        console.warn("Claude verifyKeyRequest CORS block, trying proxy...");
+                    }
+
+                    if (!response || !response.ok) {
+                        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+                        response = await fetch(proxyUrl, {
+                            method: 'POST',
+                            headers: headers,
+                            body: JSON.stringify(payload)
+                        });
+                    }
+                    return response.ok;
+                } else if (model === 'grok') {
+                    const url = `https://api.x.ai/v1/chat/completions`;
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${key}`
+                        },
+                        body: JSON.stringify({
+                            model: "grok-2-1212",
+                            messages: [{ role: "user", content: "Hello" }],
+                            max_tokens: 5
+                        })
+                    });
+                    return response.ok;
                 }
             } catch (err) {
                 console.error(`${model} 연결 오류:`, err);
@@ -496,6 +622,20 @@
                 this.updateLedState('perplexity', res ? 'connected' : 'error');
             } else {
                 this.updateLedState('perplexity', 'pending');
+            }
+
+            if (this.apiKeys.claude) {
+                const res = await this.verifyKeyRequest('claude', this.apiKeys.claude);
+                this.updateLedState('claude', res ? 'connected' : 'error');
+            } else {
+                this.updateLedState('claude', 'pending');
+            }
+
+            if (this.apiKeys.grok) {
+                const res = await this.verifyKeyRequest('grok', this.apiKeys.grok);
+                this.updateLedState('grok', res ? 'connected' : 'error');
+            } else {
+                this.updateLedState('grok', 'pending');
             }
         }
 
@@ -924,6 +1064,8 @@
                 let geminiScore = 0;
                 let chatGptScore = 0;
                 let perplexityScore = 0;
+                let claudeScore = 0;
+                let grokScore = 0;
 
                 if (this.apiKeys.gemini) {
                     geminiScore = await this.fetchGeminiAudit(q.text);
@@ -934,23 +1076,26 @@
                 if (this.apiKeys.perplexity) {
                     perplexityScore = await this.fetchPerplexityAudit(q.text);
                 }
+                if (this.apiKeys.claude) {
+                    claudeScore = await this.fetchClaudeAudit(q.text);
+                }
+                if (this.apiKeys.grok) {
+                    grokScore = await this.fetchGrokAudit(q.text);
+                }
 
                 let logInfo = '';
                 let liveCount = 0;
                 if (this.apiKeys.gemini) { logInfo += 'Gemini 실측 | '; liveCount++; }
                 if (this.apiKeys.openai) { logInfo += 'ChatGPT 실측 | '; liveCount++; }
                 if (this.apiKeys.perplexity) { logInfo += 'Perplexity 실측 | '; liveCount++; }
+                if (this.apiKeys.claude) { logInfo += 'Claude 실측 | '; liveCount++; }
+                if (this.apiKeys.grok) { logInfo += 'Grok 실측 | '; liveCount++; }
 
                 if (liveCount === 0) {
                     logInfo = `실시간 분석 대기 (API 키 없음)`;
                 } else {
                     logInfo = logInfo.slice(0, -3) + ' 적용';
                 }
-
-                // 사용자가 실측되지 않은 데이터에 대한 점수 부여를 절대 금지했으므로
-                // API 키가 없거나 미지원인 모델(Claude, Grok)은 전부 0%로 고정
-                const claudeScore = 0;
-                const grokScore = 0;
 
                 q.modelRates.Gemini = geminiScore;
                 q.modelRates.ChatGPT = chatGptScore;
@@ -987,8 +1132,8 @@
                 alertMsg += `- ChatGPT 점수 (실측): ${chatGptScore}%\n`;
                 alertMsg += `- Gemini 점수 (실측): ${geminiScore}%\n`;
                 alertMsg += `- Perplexity 점수 (실측): ${perplexityScore}%\n`;
-                alertMsg += `- Claude 점수 (미지원/미연동): ${claudeScore}%\n`;
-                alertMsg += `- Grok 점수 (미지원/미연동): ${grokScore}%\n\n`;
+                alertMsg += `- Claude 점수 (실측): ${claudeScore}%\n`;
+                alertMsg += `- Grok 점수 (실측): ${grokScore}%\n\n`;
                 alertMsg += `(※ 실측되지 않은 데이터는 사기 없는 분석을 위해 점수를 전혀 부여하지 않고 0% 처리되었습니다.)`;
                 
                 alert(alertMsg);
@@ -1099,6 +1244,92 @@
             const textResponse = data.choices?.[0]?.message?.content || '';
             
             return this.evaluateTextMentionScore(textResponse, brand);
+        }
+
+        async fetchClaudeAudit(questionText) {
+            const apiKey = this.apiKeys.claude;
+            const brand = this.targetBrand || '미담한의원';
+            
+            const systemPrompt = `너는 질문에 답하는 AI 어시스턴트이다. 사용자의 질문에 대해 일반적으로 추천되거나 많이 거론되는 한의원/병원명을 3곳 내외로 추천하고 구체적인 이유를 상세히 적어줘. 특정 병원을 억지로 추천하도록 편향을 두지 말고, 실제 인터넷 지식과 학습 지식을 기반으로 객관적인 정보만을 담아 자연스럽게 설명해줘.`;
+            const url = `https://api.anthropic.com/v1/messages`;
+            const payload = {
+                model: "claude-3-5-sonnet-20241022",
+                max_tokens: 1024,
+                system: systemPrompt,
+                messages: [{ role: "user", content: questionText }]
+            };
+            const headers = {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true'
+            };
+
+            try {
+                let response;
+                try {
+                    response = await fetch(url, {
+                        method: 'POST',
+                        headers: headers,
+                        body: JSON.stringify(payload)
+                    });
+                } catch (e) {
+                    console.warn("Claude fetch API CORS block, trying proxy...");
+                }
+
+                if (!response || !response.ok) {
+                    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+                    response = await fetch(proxyUrl, {
+                        method: 'POST',
+                        headers: headers,
+                        body: JSON.stringify(payload)
+                    });
+                }
+
+                if (!response.ok) throw new Error("Claude API fail");
+                const data = await response.json();
+                const textResponse = data.content?.[0]?.text || '';
+                return this.evaluateTextMentionScore(textResponse, brand);
+            } catch (err) {
+                console.error("Claude API 호출 실패:", err);
+                return 0;
+            }
+        }
+
+        async fetchGrokAudit(questionText) {
+            const apiKey = this.apiKeys.grok;
+            const brand = this.targetBrand || '미담한의원';
+            const url = `https://api.x.ai/v1/chat/completions`;
+            const payload = {
+                model: "grok-2-1212",
+                messages: [
+                    {
+                        role: "system",
+                        content: `너는 질문에 답하는 AI 어시스턴트이다. 사용자의 질문에 대해 일반적으로 추천되거나 많이 거론되는 한의원/병원명을 3곳 내외로 추천하고 구체적인 이유를 상세히 적어줘. 특정 병원을 억지로 추천하도록 편향을 두지 말고, 실제 인터넷 지식과 학습 지식을 기반으로 객관적인 정보만을 담아 자연스럽게 설명해줘.`
+                    },
+                    { role: "user", content: questionText }
+                ],
+                temperature: 0.5
+            };
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error("Grok API fail");
+                const data = await response.json();
+                const textResponse = data.choices?.[0]?.message?.content || '';
+                return this.evaluateTextMentionScore(textResponse, brand);
+            } catch (err) {
+                console.error("Grok API 호출 실패:", err);
+                return 0;
+            }
         }
 
         evaluateTextMentionScore(text, brand) {
@@ -1265,6 +1496,8 @@
                         this.apiKeys.gemini = parsed.apiKeys.gemini || '';
                         this.apiKeys.openai = parsed.apiKeys.openai || '';
                         this.apiKeys.perplexity = parsed.apiKeys.perplexity || '';
+                        this.apiKeys.claude = parsed.apiKeys.claude || '';
+                        this.apiKeys.grok = parsed.apiKeys.grok || '';
                     }
                     if (parsed.scheduler) this.scheduler = parsed.scheduler;
 
@@ -1273,6 +1506,8 @@
                     localStorage.setItem('geo_lens_tracker_gemini_key', this.apiKeys.gemini);
                     localStorage.setItem('geo_lens_tracker_openai_key', this.apiKeys.openai);
                     localStorage.setItem('geo_lens_tracker_perplexity_key', this.apiKeys.perplexity);
+                    localStorage.setItem('geo_lens_tracker_claude_key', this.apiKeys.claude);
+                    localStorage.setItem('geo_lens_tracker_grok_key', this.apiKeys.grok);
                     this.saveSchedulerSettings();
 
                     this.initUIValues();
@@ -1296,6 +1531,34 @@
             
             reader.readAsText(file);
             event.target.value = '';
+        }
+
+        resetTrackerData() {
+            // 1. 데이터 초기화
+            this.questions = [];
+            this.activeQuestionId = null;
+            this.targetBrand = '';
+            
+            // 2. LocalStorage 저장
+            this.saveQuestions();
+            localStorage.setItem('geo_lens_tracker_target_brand', '');
+            
+            // 3. UI 컴포넌트들 초기화
+            const brandInput = document.getElementById('target-brand-input');
+            if (brandInput) {
+                brandInput.value = '';
+            }
+            
+            const questionInput = document.getElementById('new-question-input');
+            if (questionInput) {
+                questionInput.value = '';
+            }
+            
+            // 4. UI 렌더링 갱신
+            this.renderQuestionList();
+            this.updateDashboard();
+            
+            alert('데이터가 성공적으로 초기화되었습니다. 새로운 병원명과 질문을 등록해 주세요.');
         }
     }
 
