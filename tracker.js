@@ -16,7 +16,7 @@
         constructor() {
             this.questions = [];
             this.activeQuestionId = null;
-            this.targetBrand = '자유클리닉 강남점';
+            this.targetBrand = '지유클리닉 강남점';
             this.charts = {
                 line: null,
                 radar: null
@@ -71,7 +71,7 @@
             this.apiKeys.perplexity = localStorage.getItem('geo_lens_tracker_perplexity_key') || '';
             this.apiKeys.claude = localStorage.getItem('geo_lens_tracker_claude_key') || '';
             this.apiKeys.grok = localStorage.getItem('geo_lens_tracker_grok_key') || '';
-            this.targetBrand = localStorage.getItem('geo_lens_tracker_target_brand') || '자유클리닉 강남점';
+            this.targetBrand = localStorage.getItem('geo_lens_tracker_target_brand') || '지유클리닉 강남점';
             
             // 이메일 스케줄러 로드
             try {
@@ -90,7 +90,7 @@
             this.apiKeys.perplexity = perplexityKey.trim();
             this.apiKeys.claude = claudeKey.trim();
             this.apiKeys.grok = grokKey.trim();
-            this.targetBrand = brandName.trim() || '자유클리닉 강남점';
+            this.targetBrand = brandName.trim() || '지유클리닉 강남점';
 
             localStorage.setItem('geo_lens_tracker_gemini_key', this.apiKeys.gemini);
             localStorage.setItem('geo_lens_tracker_openai_key', this.apiKeys.openai);
