@@ -554,6 +554,42 @@
             const countSpan = document.getElementById('stats-question-count');
             if (countSpan) countSpan.textContent = this.questions.length;
 
+            // 배너 엘리먼트 획득 및 상태 업데이트
+            const banner = document.getElementById('demo-mode-warning-banner');
+            if (banner) {
+                const hasGemini = !!this.apiKeys.gemini;
+                const hasOpenai = !!this.apiKeys.openai;
+
+                if (!hasGemini && !hasOpenai) {
+                    banner.style.display = 'flex';
+                    banner.className = 'demo-warning-banner demo-active';
+                    banner.innerHTML = `
+                        <i data-lucide="alert-triangle" style="width: 14px; height: 14px; flex-shrink: 0; margin-right: 4px;"></i>
+                        <span>⚠️ 현재 API 키 미등록 상태로 <strong>데모 모드(추정 데이터)</strong>로 동작하고 있습니다. 실제 AI 검색 결과에 따른 정확한 언급률을 반영하려면 왼쪽 하단에서 API Key를 입력하고 연결 테스트를 완료해 주세요.</span>
+                    `;
+                } else if (hasGemini && hasOpenai) {
+                    banner.style.display = 'flex';
+                    banner.className = 'demo-warning-banner live-full';
+                    banner.innerHTML = `
+                        <i data-lucide="check-circle" style="width: 14px; height: 14px; flex-shrink: 0; margin-right: 4px;"></i>
+                        <span>🟢 ChatGPT와 Gemini의 <strong>실시간 API 실측 데이터</strong>가 대시보드에 적용되었습니다. (언급이 전혀 없는 모델은 0%로 정직하게 실측되며, 미지원 모델 또한 실측 데이터를 기반으로 0% 연동 처리됩니다)</span>
+                    `;
+                } else {
+                    banner.style.display = 'flex';
+                    banner.className = 'demo-warning-banner live-partial';
+                    const activeModel = hasGemini ? 'Gemini' : 'ChatGPT';
+                    const inactiveModel = hasGemini ? 'ChatGPT' : 'Gemini';
+                    banner.innerHTML = `
+                        <i data-lucide="info" style="width: 14px; height: 14px; flex-shrink: 0; margin-right: 4px;"></i>
+                        <span>ℹ️ <strong>${activeModel}</strong>은 실시간 API 실측 데이터가 반영되며, 미등록된 <strong>${inactiveModel}</strong> 및 기타 모델은 실측 연동 추정치로 자동 조율됩니다. (언급이 없으면 0%로 정직하게 표기됩니다)</span>
+                    `;
+                }
+
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
+            }
+
             if (!q) {
                 document.getElementById('trend-overall-rate').textContent = '0.0%';
                 const deltaSpan = document.getElementById('trend-overall-delta');
@@ -611,9 +647,22 @@
                     diffText = `● ${diff.toFixed(1)}%p`;
                 }
 
+                // API 키 등록 상태에 따른 실측 / 추정 배지 구분
+                let statusBadge = '';
+                if (model === 'ChatGPT') {
+                    statusBadge = this.apiKeys.openai ? '<span class="badge badge-live">실측</span>' : '<span class="badge badge-estimate">추정</span>';
+                } else if (model === 'Gemini') {
+                    statusBadge = this.apiKeys.gemini ? '<span class="badge badge-live">실측</span>' : '<span class="badge badge-estimate">추정</span>';
+                } else {
+                    statusBadge = '<span class="badge badge-estimate">추정</span>';
+                }
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td class="model-cell">${model}</td>
+                    <td class="model-cell" style="display: flex; align-items: center; justify-content: flex-start; gap: 4px;">
+                        <span>${model}</span>
+                        ${statusBadge}
+                    </td>
                     <td class="rate-val" style="color: var(--text-muted);">${baseVal.toFixed(1)}%</td>
                     <td class="rate-val" style="color: var(--neon-green); font-weight: 700;">${curVal.toFixed(1)}%</td>
                     <td class="change-cell ${diffClass}">${diffText}</td>
@@ -973,6 +1022,10 @@
         }
 
         calculateSimulatedFromBase(baseScore, modelName) {
+            // 실측 스코어가 0%인 경우(언급이 전혀 없는 경우), 추정 결과도 0%로 맞춰 정직하게 노출함
+            if (baseScore === 0) {
+                return 0;
+            }
             let offset = 0;
             if (modelName === 'Claude') offset = -5;
             if (modelName === 'Grok') offset = -10;

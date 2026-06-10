@@ -1869,7 +1869,7 @@ h1, h2, h3, h4, h5, h6 {
     gap: 10px;
     margin-top: 8px;
     overflow-y: auto;
-    max-height: 400px;
+    max-height: 600px; /* 기존 400px에서 600px로 확장 */
 }
 
 .question-item {
@@ -1907,10 +1907,14 @@ h1, h2, h3, h4, h5, h6 {
 .question-item-text {
     font-size: 13px;
     font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal; /* 줄바꿈 허용하여 긴 질문도 보이게 함 */
+    word-break: break-all;
     color: var(--text-primary);
+    user-select: text !important; /* 드래그 및 복사 허용 */
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    cursor: text; /* 텍스트 선택이 가능함을 알려주기 위한 커서 스타일 */
 }
 
 .question-item-meta {
@@ -2638,4 +2642,52 @@ body.is-printing .print-only-pane {
         width: 100% !important;
         page-break-inside: avoid;
     }
+}
+
+/* 추적기용 실측/추정 안내 배너 및 테이블 배지 스타일 */
+.demo-warning-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    line-height: 1.4;
+    margin-top: 8px;
+}
+.demo-warning-banner.demo-active {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: #f59e0b;
+}
+.demo-warning-banner.live-partial {
+    background: rgba(0, 242, 254, 0.1);
+    border: 1px solid rgba(0, 242, 254, 0.3);
+    color: var(--neon-cyan, #00f2fe);
+}
+.demo-warning-banner.live-full {
+    background: rgba(57, 255, 20, 0.1);
+    border: 1px solid rgba(57, 255, 20, 0.3);
+    color: var(--neon-green, #39ff14);
+}
+
+.badge {
+    display: inline-block;
+    padding: 2px 6px;
+    font-size: 9px;
+    font-weight: 700;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+    text-transform: uppercase;
+}
+.badge-live {
+    border: 1px solid var(--neon-green, #39ff14);
+    color: var(--neon-green, #39ff14);
+    background: rgba(57, 255, 20, 0.05);
+}
+.badge-estimate {
+    border: 1px solid #f59e0b;
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.05);
 }
