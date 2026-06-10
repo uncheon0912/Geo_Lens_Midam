@@ -1509,32 +1509,34 @@ ${context}
         }
 
         async fetchWebSearchSnippets(query) {
+            // DuckDuckGo 검색 결과 URL (한글 쿼리를 단 한 번만 안전하게 인코딩)
             const searchQueries = [
-                `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
-                `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`
+                `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`,
+                `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`
             ];
 
             // 프록시별 맞춤 경로 조합 빌더 정의
             const proxyBuilders = [
                 {
-                    name: "corsproxy.io",
-                    build: (url) => `https://corsproxy.io/?${url}` // 인코딩하지 않고 원본 전달 시도
+                    name: "cors.eu.org",
+                    build: (url) => `https://cors.eu.org/${url}`
                 },
                 {
-                    name: "corsproxy.io (encoded)",
-                    build: (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`
+                    name: "corsproxy.io (direct)",
+                    build: (url) => `https://corsproxy.io/?${url}`
                 },
                 {
-                    name: "codetabs.com",
-                    build: (url) => `https://api.codetabs.com/v1/proxy?url=${encodeURIComponent(url)}`
+                    name: "allorigins (json)",
+                    build: (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+                    isJson: true
                 },
                 {
-                    name: "allorigins.win",
+                    name: "allorigins (raw)",
                     build: (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
                 },
                 {
-                    name: "thingproxy",
-                    build: (url) => `https://thingproxy.freeboard.io/fetch/${url}`
+                    name: "codetabs",
+                    build: (url) => `https://api.codetabs.com/v1/proxy?url=${encodeURIComponent(url)}`
                 }
             ];
 
@@ -1546,7 +1548,8 @@ ${context}
                     debugLog.push(`[시도] 프록시: ${proxy.name} | URL: ${fullUrl}`);
                     try {
                         const controller = new AbortController();
-                        const timeoutId = setTimeout(() => controller.abort(), 8000);
+                        // 타임아웃을 15초(15000ms)로 넉넉하게 지정하여 allorigins가 차단/중단되지 않게 함
+                        const timeoutId = setTimeout(() => controller.abort(), 15000);
 
                         const response = await fetch(fullUrl, { signal: controller.signal });
                         clearTimeout(timeoutId);
@@ -1555,16 +1558,23 @@ ${context}
                             debugLog.push(`-> HTTP 에러: 상태 코드 ${response.status}`);
                             continue;
                         }
-                        const htmlText = await response.text();
+                        
+                        let htmlText = '';
+                        if (proxy.isJson) {
+                            const json = await response.json();
+                            htmlText = json.contents || '';
+                        } else {
+                            htmlText = await response.text();
+                        }
                         
                         if (!htmlText || htmlText.length < 200) {
                             debugLog.push(`-> 응답 텍스트 길이 부족 (${htmlText ? htmlText.length : 0} 바이트)`);
                             continue;
                         }
 
-                        // 봇 감지 챌린지 문구 등이 수집되었는지 체크
-                        if (htmlText.includes("ddg-captcha") || htmlText.includes("robot") || htmlText.includes("automated access")) {
-                            debugLog.push(`-> 봇 감지 차단(Captcha) 발생`);
+                        // 봇 감지 챌린지 차단 확인
+                        if (htmlText.includes("ddg-captcha") || htmlText.includes("robot") || htmlText.includes("automated access") || htmlText.includes("Forbidden")) {
+                            debugLog.push(`-> 봇 감지 차단(Captcha/Forbidden) 발생`);
                             continue;
                         }
 
@@ -1574,13 +1584,12 @@ ${context}
                         let snippets = [];
                         
                         if (searchUrl.includes('html.duckduckgo.com')) {
-                            // html.duckduckgo.com 스니펫 파싱
+                            // html.duckduckgo.com 파싱
                             const results = doc.querySelectorAll('.result__snippet');
                             results.forEach((el, index) => {
                                 if (index < 10) snippets.push(el.textContent.trim());
                             });
                             
-                            // 스니펫이 잡히지 않을 경우 대체 파싱 시도 (웹 검색 전체 바디)
                             if (snippets.length === 0) {
                                 const fallbacks = doc.querySelectorAll('.web-result');
                                 fallbacks.forEach((el, index) => {
@@ -1588,7 +1597,7 @@ ${context}
                                 });
                             }
                         } else {
-                            // lite.duckduckgo.com 결과 파싱 (클래스가 없는 경량 HTML 표 기반)
+                            // lite.duckduckgo.com 파싱
                             const tdSnippets = doc.querySelectorAll('.result-snippet');
                             tdSnippets.forEach((el, index) => {
                                 if (index < 10) snippets.push(el.textContent.trim());
