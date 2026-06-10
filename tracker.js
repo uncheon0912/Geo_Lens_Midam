@@ -1145,6 +1145,9 @@
                 this.lastResponses.SearchContext = perplexityContext || "실시간 웹 검색 결과가 비어 있거나 수집하지 못했습니다.";
                 localStorage.setItem('geo_lens_tracker_last_responses', JSON.stringify(this.lastResponses));
 
+                // 무료 검색 크롤링 실패 시 AI 프롬프트에 디버그용 에러 메시지가 RAG 컨텍스트로 주입되는 것을 차단
+                const actualRAGContext = (perplexityContext && !perplexityContext.startsWith('[오류]')) ? perplexityContext : '';
+
                 let geminiScore = 0;
                 let chatGptScore = 0;
                 let perplexityScore = 0;
@@ -1159,13 +1162,13 @@
                     geminiScore = await this.fetchGeminiAudit(q.text);
                 }
                 if (this.apiKeys.openai) {
-                    chatGptScore = await this.fetchOpenAIAudit(q.text, perplexityContext);
+                    chatGptScore = await this.fetchOpenAIAudit(q.text, actualRAGContext);
                 }
                 if (this.apiKeys.claude) {
-                    claudeScore = await this.fetchClaudeAudit(q.text, perplexityContext);
+                    claudeScore = await this.fetchClaudeAudit(q.text, actualRAGContext);
                 }
                 if (this.apiKeys.grok) {
-                    grokScore = await this.fetchGrokAudit(q.text, perplexityContext);
+                    grokScore = await this.fetchGrokAudit(q.text, actualRAGContext);
                 }
 
                 let logInfo = '';
@@ -1500,30 +1503,92 @@ ${context}
         }
 
         async fetchWebSearchSnippets(query) {
-            const targetUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+            const searchQueries = [
+                `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
+                `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`
+            ];
 
-            try {
-                const response = await fetch(proxyUrl);
-                if (!response.ok) return '';
-                const htmlText = await response.text();
-                
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(htmlText, 'text/html');
-                const results = doc.querySelectorAll('.result__snippet');
-                
-                let snippets = [];
-                results.forEach((el, index) => {
-                    if (index < 10) {
-                        snippets.push(el.textContent.trim());
+            const proxies = [
+                (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+                (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+            ];
+
+            let debugLog = [];
+
+            for (const searchUrl of searchQueries) {
+                for (const proxyFn of proxies) {
+                    const fullUrl = proxyFn(searchUrl);
+                    debugLog.push(`[시도] URL: ${fullUrl}`);
+                    try {
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+                        const response = await fetch(fullUrl, { signal: controller.signal });
+                        clearTimeout(timeoutId);
+
+                        if (!response.ok) {
+                            debugLog.push(`-> HTTP 에러 발생: 상태 코드 ${response.status}`);
+                            continue;
+                        }
+                        const htmlText = await response.text();
+                        
+                        if (!htmlText || htmlText.length < 200) {
+                            debugLog.push(`-> 응답 텍스트 길이 부족 (${htmlText ? htmlText.length : 0} 바이트)`);
+                            continue;
+                        }
+
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(htmlText, 'text/html');
+                        
+                        let snippets = [];
+                        
+                        if (searchUrl.includes('html.duckduckgo.com')) {
+                            // html.duckduckgo.com 스니펫 파싱
+                            const results = doc.querySelectorAll('.result__snippet');
+                            results.forEach((el, index) => {
+                                if (index < 10) snippets.push(el.textContent.trim());
+                            });
+                            
+                            // 스니펫이 잡히지 않을 경우 대체 파싱 시도 (웹 검색 전체 바디)
+                            if (snippets.length === 0) {
+                                const fallbacks = doc.querySelectorAll('.web-result');
+                                fallbacks.forEach((el, index) => {
+                                    if (index < 10) snippets.push(el.textContent.trim().replace(/\s+/g, ' '));
+                                });
+                            }
+                        } else {
+                            // lite.duckduckgo.com 결과 파싱 (클래스가 없는 경량 HTML 표 기반)
+                            const tdSnippets = doc.querySelectorAll('.result-snippet');
+                            tdSnippets.forEach((el, index) => {
+                                if (index < 10) snippets.push(el.textContent.trim());
+                            });
+
+                            if (snippets.length === 0) {
+                                const rows = doc.querySelectorAll('table tr');
+                                rows.forEach((row, index) => {
+                                    const text = row.textContent.trim();
+                                    if (text && text.length > 30 && snippets.length < 10 && !text.includes('정렬') && !text.includes('검색 결과')) {
+                                        snippets.push(text.replace(/\s+/g, ' '));
+                                    }
+                                });
+                            }
+                        }
+
+                        if (snippets.length > 0) {
+                            debugLog.push(`-> 파싱 성공: ${snippets.length}개의 스니펫 추출 완료.`);
+                            return snippets.join('\n\n');
+                        } else {
+                            debugLog.push(`-> 파싱 결과 스니펫이 0개입니다.`);
+                        }
+
+                    } catch (err) {
+                        debugLog.push(`-> 예외 에러 발생: ${err.message || err}`);
                     }
-                });
-                
-                return snippets.join('\n\n');
-            } catch (err) {
-                console.error("무료 DuckDuckGo 웹 검색 결과 추출 실패:", err);
-                return '';
+                }
             }
+
+            console.error("무료 웹 검색 결과 수집 전체 실패. 상세 로그:\n", debugLog.join('\n'));
+            return `[오류] 무료 웹 검색(RAG) 수집에 실패했습니다. 아래 상세 시도 로그를 참조하십시오.\n\n` + debugLog.join('\n');
         }
 
         evaluateTextMentionScore(text, brand) {
